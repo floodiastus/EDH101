@@ -1,6 +1,6 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { challengeRating } from "./challenge-rating.mjs";
-import { deriveThemeLabels } from "./theme-taxonomy.mjs";
+import { deriveThemeLabels, deriveTribes } from "./theme-taxonomy.mjs";
 
 const headers = {
   Accept: "application/json;q=0.9,*/*;q=0.8",
@@ -45,14 +45,6 @@ function mechanicalInterest(text) {
   const hooks = ["whenever", "at the beginning", "for each", "you may", "if you would", "create", "copy", "cast", "sacrifice", "exile", "graveyard", "counter", "choose", "draw", "discard", "combat", "token", "artifact", "enchantment"];
   const narrow = ["landwalk", "rampage", "bands with other", "can be blocked as though"];
   return Math.min(12, text.length / 34) + hooks.reduce((sum, hook) => sum + (lower.includes(hook) ? 3.2 : 0), 0) - narrow.reduce((sum, hook) => sum + (lower.includes(hook) ? 7 : 0), 0);
-}
-
-function deriveThemes(card, tags) {
-  return deriveThemeLabels({
-    oracleText: oracleText(card),
-    typeLine: String(card.type_line ?? ""),
-    existingThemes: tags.map((tag) => tag.trim()).filter(Boolean),
-  });
 }
 
 function explain(themes, text) {
@@ -121,11 +113,12 @@ async function commanderPool() {
   return cards.filter((card) => imageUris(card).normal && new Date(String(card.released_at ?? 0)).getTime() <= Date.now());
 }
 
-function baseCard(card, popularityRank, total) {
+function baseCard(card, popularityRank, total, creatureTypes) {
   const name = String(card.name ?? "").split(" // ")[0];
   const images = imageUris(card);
   const text = oracleText(card);
-  const themes = deriveThemes(card, []);
+  const tribes = deriveTribes({ oracleText: text, typeLine: String(card.type_line ?? ""), creatureTypes });
+  const themes = deriveThemeLabels({ oracleText: text, typeLine: String(card.type_line ?? ""), creatureTypes, tribes });
   const priceValue = record(card.prices).usd ? Number(record(card.prices).usd) : null;
   return {
     id: String(card.id ?? name), name, manaCost: manaCost(card), manaValue: Number(card.cmc ?? 0),
@@ -135,12 +128,12 @@ function baseCard(card, popularityRank, total) {
     scryfallUrl: String(card.scryfall_uri ?? "https://scryfall.com"), releasedAt: String(card.released_at ?? ""),
     setName: String(card.set_name ?? ""), edhrecRank: Number(card.edhrec_rank ?? 0), popularityRank,
     deckCount: null, salt: 0, price: Number.isFinite(priceValue) ? priceValue : null,
-    themes, signatures: [], obscurityScore: rankObscurity(popularityRank, total, String(card.released_at ?? "")),
+    themes, tribes, signatures: [], obscurityScore: rankObscurity(popularityRank, total, String(card.released_at ?? "")),
     why: explain(themes, text), caution: warning(null, Number(card.cmc ?? 0), text),
   };
 }
 
-async function enrich(entry, total) {
+async function enrich(entry, total, creatureTypes) {
   const { card, popularityRank } = entry;
   try {
     const name = String(card.name ?? "").split(" // ")[0];
@@ -155,7 +148,8 @@ async function enrich(entry, total) {
     const signatures = (Array.isArray(highSynergy?.cardviews) ? highSynergy.cardviews : []).slice(0, 3).map((item) => signatureCard(record(item))).filter(Boolean);
     const images = imageUris(card);
     const text = oracleText(card);
-    const themes = deriveThemes(card, tags);
+    const tribes = deriveTribes({ oracleText: text, typeLine: String(card.type_line ?? ""), existingThemes: tags, creatureTypes });
+    const themes = deriveThemeLabels({ oracleText: text, typeLine: String(card.type_line ?? ""), existingThemes: tags, creatureTypes, tribes });
     const priceValue = record(card.prices).usd ? Number(record(card.prices).usd) : null;
     return {
       id: String(card.id ?? name), name, manaCost: manaCost(card), manaValue: Number(card.cmc ?? 0),
@@ -165,12 +159,12 @@ async function enrich(entry, total) {
       scryfallUrl: String(card.scryfall_uri ?? "https://scryfall.com"), releasedAt: String(card.released_at ?? ""),
       setName: String(card.set_name ?? ""), edhrecRank: Number(card.edhrec_rank ?? commander.rank ?? 0), popularityRank,
       deckCount, salt: Number(commander.salt ?? 0), price: Number.isFinite(priceValue) ? priceValue : null,
-      themes, signatures, obscurityScore: obscurity(deckCount, String(card.released_at ?? "")),
+      themes, tribes, signatures, obscurityScore: obscurity(deckCount, String(card.released_at ?? "")),
       why: explain(themes, text), caution: warning(deckCount, Number(card.cmc ?? 0), text),
     };
   } catch (error) {
     console.warn(`Using rank-only data for ${card.name}: ${error.message}`);
-    return baseCard(card, popularityRank, total);
+    return baseCard(card, popularityRank, total, creatureTypes);
   }
 }
 
@@ -190,7 +184,12 @@ async function mapLimit(items, limit, mapper) {
 
 async function main() {
   console.log("Loading the complete legal commander pool...");
-  const [pool, symbolData] = await Promise.all([commanderPool(), fetchJson("https://api.scryfall.com/symbology")]);
+  const [pool, symbolData, creatureTypeData] = await Promise.all([
+    commanderPool(),
+    fetchJson("https://api.scryfall.com/symbology"),
+    fetchJson("https://api.scryfall.com/catalog/creature-types"),
+  ]);
+  const creatureTypes = Array.isArray(creatureTypeData.data) ? creatureTypeData.data.map(String) : [];
   const total = pool.length;
   const enrichmentPool = pool
     .map((card, index) => {
@@ -203,10 +202,10 @@ async function main() {
     .sort((a, b) => b.score - a.score)
     .slice(0, 220);
   console.log(`Layering detailed popularity data onto ${enrichmentPool.length} promising deep cuts...`);
-  const enriched = await mapLimit(enrichmentPool, 5, (entry) => enrich(entry, total));
+  const enriched = await mapLimit(enrichmentPool, 5, (entry) => enrich(entry, total, creatureTypes));
   const enrichedById = new Map(enriched.filter(Boolean).map((card) => [card.id, card]));
   const cards = pool.map((card, index) => {
-    const result = enrichedById.get(String(card.id)) ?? baseCard(card, total - index, total);
+    const result = enrichedById.get(String(card.id)) ?? baseCard(card, total - index, total, creatureTypes);
     return { ...result, ...challengeRating(result) };
   });
   const symbols = {};
@@ -214,7 +213,7 @@ async function main() {
     if (item.symbol && item.svg_uri) symbols[String(item.symbol)] = String(item.svg_uri);
   }
   await mkdir(new URL("../web/public/data/", import.meta.url), { recursive: true });
-  await writeFile(new URL("../web/public/data/commanders.json", import.meta.url), JSON.stringify({ generatedAt: new Date().toISOString(), cards, symbols }));
+  await writeFile(new URL("../web/public/data/commanders.json", import.meta.url), JSON.stringify({ generatedAt: new Date().toISOString(), cards, symbols, creatureTypes }));
   console.log(`Wrote ${cards.length} commanders; ${enrichedById.size} include expanded EDHREC details.`);
 }
 

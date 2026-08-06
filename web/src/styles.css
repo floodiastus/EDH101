@@ -112,6 +112,12 @@ button:focus-visible, summary:focus-visible, select:focus-visible, input:focus-v
 .theme-chips { margin: 14px 0; display: flex; flex-wrap: wrap; gap: 5px; }
 .theme-chips button { padding: 5px 8px; color: #8c8579; border: 1px solid var(--line); border-radius: 99px; background: transparent; font-size: 7px; }
 .theme-chips button:hover { color: var(--acid); border-color: rgba(215,235,105,.4); }
+.deck-search-link { max-width: 570px; min-height: 47px; margin: 14px 0; padding: 9px 12px; display: flex; align-items: center; justify-content: space-between; gap: 14px; color: var(--cream); border: 1px solid rgba(215,235,105,.34); border-radius: 4px; background: rgba(215,235,105,.06); text-decoration: none; }
+.deck-search-link > span { min-width: 0; display: grid; gap: 4px; }
+.deck-search-link strong { font: 800 9px var(--font-geist-mono), monospace; letter-spacing: .04em; text-transform: uppercase; }
+.deck-search-link code { overflow: hidden; color: #817b6f; font: 7px var(--font-geist-mono), monospace; text-overflow: ellipsis; white-space: nowrap; }
+.deck-search-link > b { color: var(--acid); font-size: 17px; }
+.deck-search-link:hover { border-color: var(--acid); background: rgba(215,235,105,.1); }
 .build-note { max-width: 570px; color: #81796e; font-size: 8px; }
 .build-note summary { width: max-content; cursor: pointer; text-decoration: underline; }
 .build-note p { margin: 8px 0 0; line-height: 1.5; }

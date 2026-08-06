@@ -30,6 +30,7 @@ type CommanderCard = {
   salt: number;
   price: number | null;
   themes: string[];
+  tribes?: string[];
   signatures: SignatureCard[];
   obscurityScore: number;
   why: string;
@@ -50,6 +51,64 @@ const COLORS = [
   { key: "G", label: "Green" },
   { key: "C", label: "Colorless" },
 ];
+
+const THEME_SEARCHES: Record<string, string> = {
+  "+1/+1 Counters": 'o:"+1/+1 counter"',
+  Aristocrats: "o:sacrifice",
+  Artifacts: "t:artifact",
+  Auras: "t:aura",
+  Blink: "o:exile o:return o:battlefield",
+  "Card Draw": "o:draw",
+  Clones: 'o:"a copy"',
+  Clues: "(o:clue or o:investigate)",
+  Control: 'o:"counter target"',
+  Discard: "o:discard",
+  Enchantress: "t:enchantment",
+  Equipment: "t:equipment",
+  "Extra Combats": 'o:"additional combat"',
+  "Extra Turns": 'o:"extra turn"',
+  Food: "o:food",
+  Graveyard: "o:graveyard",
+  Landfall: '(kw:landfall or o:"land enters")',
+  Lands: "t:land",
+  Lifedrain: "o:loses o:life",
+  Lifegain: 'o:"gain life"',
+  Mill: "o:mill",
+  Planeswalkers: "t:planeswalker",
+  Politics: "(o:goad or o:monarch or o:vote)",
+  Reanimator: 'o:"from your graveyard" o:"to the battlefield"',
+  Sacrifice: "o:sacrifice",
+  Spellslinger: "(t:instant or t:sorcery)",
+  Tokens: "o:create o:token",
+  Treasure: "o:treasure",
+  Vehicles: "t:vehicle",
+  Voltron: "(t:aura or t:equipment)",
+  Wheels: "o:discard o:draw",
+};
+
+function scryfallType(creatureType: string) {
+  return /\s/.test(creatureType) ? `t:"${creatureType.toLowerCase()}"` : `t:${creatureType.toLowerCase()}`;
+}
+
+function deckSearch(card: CommanderCard) {
+  const tribes = card.tribes ?? [];
+  const theme = card.themes.find((item) => THEME_SEARCHES[item]);
+  const focus = tribes.length > 1
+    ? `(${tribes.map(scryfallType).join(" or ")})`
+    : tribes.length === 1
+      ? scryfallType(tribes[0])
+      : theme ? THEME_SEARCHES[theme] : null;
+  if (!focus) return null;
+  const identity = card.colorIdentity.length ? card.colorIdentity.join("").toLowerCase() : "c";
+  const query = `${focus} id<=${identity} legal:commander game:paper`;
+  const params = new URLSearchParams({ q: query, unique: "cards", as: "grid", order: "edhrec" });
+  const tribeLabel = tribes.length > 2 ? `${tribes[0]} + ${tribes.length - 1} tribes` : tribes.join(" + ");
+  return {
+    label: tribes.length ? `Find ${tribeLabel} cards` : `Find ${theme} cards`,
+    query,
+    url: `https://scryfall.com/search?${params.toString()}`,
+  };
+}
 
 function complexity(card: CommanderCard) {
   const length = card.oracleText.length;
@@ -117,6 +176,7 @@ export default function Home() {
         const data = JSON.parse(saved) as { shortlist?: CommanderCard[]; taste?: Record<string, number> };
         setShortlist((data.shortlist ?? []).map((card) => ({
           ...card,
+          tribes: Array.isArray(card.tribes) ? card.tribes : [],
           signatures: Array.isArray(card.signatures) ? card.signatures.filter((item) => typeof item === "object" && item !== null) : [],
         })));
         setTaste(data.taste ?? {});
@@ -159,7 +219,9 @@ export default function Home() {
       const result = await response.json() as { cards?: CommanderCard[]; symbols?: Record<string, string>; error?: string };
       if (!response.ok || !result.cards?.length) throw new Error(result.error ?? "No commanders found.");
       const nextCards = shuffled(result.cards);
+      const cardsById = new Map(nextCards.map((card) => [card.id, card]));
       setCards(nextCards);
+      setShortlist((items) => items.map((card) => cardsById.get(card.id) ?? card));
       setSymbols(result.symbols ?? {});
       setSeen([]);
       setActiveId(nextCards[0].id);
@@ -305,6 +367,7 @@ export default function Home() {
       : drag.x > 38 && Math.abs(drag.x) >= Math.abs(drag.y) * .8
         ? "intriguing"
         : "";
+  const currentDeckSearch = current ? deckSearch(current) : null;
 
   return (
     <main>
@@ -382,6 +445,9 @@ export default function Home() {
                   <p className="why-text">{current.why}</p>
                   {current.challengePick && <p className="challenge-note">{current.challengeReason}</p>}
                   {current.themes.length > 0 && <div className="theme-chips">{current.themes.slice(0, 4).map((item) => <button key={item} onClick={() => setTheme(item)}>{item}</button>)}</div>}
+                  {currentDeckSearch && <a className="deck-search-link" href={currentDeckSearch.url} target="_blank" rel="noreferrer" aria-label={`${currentDeckSearch.label} on Scryfall`}>
+                    <span><strong>{currentDeckSearch.label}</strong><code>{currentDeckSearch.query}</code></span><b aria-hidden="true">↗</b>
+                  </a>}
                   {current.caution && <details className="build-note"><summary>Build-around note</summary><p>{current.caution}</p></details>}
 
                   <div className="reaction-bar" aria-label="Commander reactions">
