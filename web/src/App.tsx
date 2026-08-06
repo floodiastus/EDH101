@@ -44,6 +44,9 @@ type Complexity = "any" | "clean" | "layered" | "crunchy";
 type Reaction = "pass" | "love";
 
 const PACK_SIZE = 5;
+const POPULARITY_MIN = 100;
+const POPULARITY_MAX = 3000;
+const POPULARITY_STEP = 100;
 
 const COLORS = [
   { key: "W", label: "White" },
@@ -88,8 +91,34 @@ const THEME_SEARCHES: Record<string, string> = {
   Wheels: "o:discard o:draw",
 };
 
+const SEARCH_THEME_PRIORITY = [
+  "Clues", "Food", "Treasure", "Vehicles", "Equipment", "Auras", "Planeswalkers",
+  "Landfall", "Mill", "Discard", "Sacrifice", "+1/+1 Counters", "Reanimator",
+  "Lifedrain", "Lifegain", "Blink", "Wheels", "Extra Combats", "Extra Turns",
+  "Enchantress", "Voltron", "Artifacts", "Spellslinger", "Graveyard", "Lands",
+  "Tokens", "Card Draw", "Control", "Politics",
+];
+
 function scryfallType(creatureType: string) {
   return /\s/.test(creatureType) ? `t:"${creatureType.toLowerCase()}"` : `t:${creatureType.toLowerCase()}`;
+}
+
+function createdCreatureTypes(oracleText: string) {
+  const types = Array.from(oracleText.matchAll(/\b(?:create|Create)\b[^.!?\n]*?\b((?:[A-Z][a-zA-Z'’-]*)(?:\s+[A-Z][a-zA-Z'’-]*)*)\s+(?:(?:artifact|enchantment|land)\s+)*creature tokens?\b/g),
+    (match) => match[1]);
+
+  // Some cards define token types in bullet points after the create instruction.
+  if (/create a creature token with those characteristics/i.test(oracleText)) {
+    types.push(...Array.from(oracleText.matchAll(/•\s+(?:X|\d+\/\d+)\s+(?:[a-z]+\s+)*((?:[A-Z][a-zA-Z'’-]*)(?:\s+[A-Z][a-zA-Z'’-]*)*)\s+with\b/g),
+      (match) => match[1]));
+  }
+
+  return [...new Set(types)];
+}
+
+function tokenTypeSearch(creatureType: string) {
+  const oracleType = creatureType.toLowerCase().replace(/"/g, '\\"');
+  return `(${scryfallType(creatureType)} or o:"${oracleType}")`;
 }
 
 function edhrecCommanderUrl(name: string) {
@@ -103,23 +132,28 @@ function edhrecCommanderUrl(name: string) {
   return `https://edhrec.com/commanders/${slug}`;
 }
 
-function deckSearch(card: CommanderCard) {
+function deckSearches(card: CommanderCard) {
   const tribes = card.tribes ?? [];
-  const theme = card.themes.find((item) => THEME_SEARCHES[item]);
-  const focus = tribes.length > 1
-    ? `(${tribes.map(scryfallType).join(" or ")})`
-    : tribes.length === 1
-      ? scryfallType(tribes[0])
-      : theme ? THEME_SEARCHES[theme] : null;
-  if (!focus) return null;
+  const createdTypes = createdCreatureTypes(card.oracleText);
   const identity = card.colorIdentity.length ? card.colorIdentity.join("").toLowerCase() : "c";
-  const query = `${focus} id<=${identity} legal:commander game:paper`;
-  const params = new URLSearchParams({ q: query, unique: "cards", as: "grid", order: "edhrec" });
-  const tribeLabel = tribes.length > 2 ? `${tribes[0]} + ${tribes.length - 1} tribes` : tribes.join(" + ");
-  return {
-    label: tribes.length ? `Find ${tribeLabel} cards` : `Find ${theme} cards`,
-    url: `https://scryfall.com/search?${params.toString()}`,
-  };
+  const orderedThemes = [
+    ...SEARCH_THEME_PRIORITY.filter((theme) => card.themes.includes(theme)),
+    ...card.themes.filter((theme) => THEME_SEARCHES[theme] && !SEARCH_THEME_PRIORITY.includes(theme)),
+  ].filter((theme) => theme !== "Tokens" || createdTypes.length === 0);
+  const focuses = [
+    ...createdTypes.map((creatureType) => ({ label: creatureType, query: tokenTypeSearch(creatureType) })),
+    ...tribes.map((tribe) => ({ label: tribe, query: scryfallType(tribe) })),
+    ...orderedThemes.map((theme) => ({ label: theme, query: THEME_SEARCHES[theme] })),
+  ];
+  const seen = new Set<string>();
+
+  return focuses.flatMap(({ label, query }) => {
+    if (!query || seen.has(query)) return [];
+    seen.add(query);
+    const search = `${query} id<=${identity} legal:commander game:paper`;
+    const params = new URLSearchParams({ q: search, unique: "cards", as: "grid", order: "edhrec" });
+    return [{ label, url: `https://scryfall.com/search?${params.toString()}` }];
+  }).slice(0, 4);
 }
 
 function complexity(card: CommanderCard) {
@@ -162,7 +196,8 @@ export default function Home() {
   const [cards, setCards] = useState<CommanderCard[]>([]);
   const [symbols, setSymbols] = useState<Record<string, string>>({});
   const [selectedColors, setSelectedColors] = useState<string[]>([]);
-  const [popularityCutoff, setPopularityCutoff] = useState(2000);
+  const [popularityStart, setPopularityStart] = useState(100);
+  const [popularityEnd, setPopularityEnd] = useState(500);
   const [theme, setTheme] = useState("Any theme");
   const [complexityFilter, setComplexityFilter] = useState<Complexity>("any");
   const [showChallengePicks, setShowChallengePicks] = useState(false);
@@ -185,7 +220,6 @@ export default function Home() {
   const [soundEnabled, setSoundEnabled] = useState(() => window.localStorage.getItem("deep-cuts-sound") !== "off");
   const swipeOrigin = useRef<{ x: number; y: number; pointerId: number } | null>(null);
   const swipeTimer = useRef<number | null>(null);
-  const profileScrollRef = useRef<HTMLDivElement | null>(null);
   const sound = useRef<SoundEngine | null>(null);
 
   if (sound.current === null) sound.current = new SoundEngine();
@@ -301,7 +335,7 @@ export default function Home() {
       const identity = [...card.colorIdentity].sort().join("") || "C";
       return selected === identity;
     })
-    .filter((card) => card.popularityRank > popularityCutoff)
+    .filter((card) => card.popularityRank >= popularityStart && card.popularityRank <= popularityEnd)
     .filter((card) => showChallengePicks || !card.challengePick)
     .filter((card) => showShitlisted || !shitlistedIds.has(card.id))
     .filter((card) => theme === "Any theme" || card.themes.includes(theme))
@@ -309,17 +343,13 @@ export default function Home() {
     .map((card) => ({ card, score: card.popularityRank + card.themes.reduce((sum, item) => sum + (taste[item] ?? 0) * 120, 0) }))
     .sort((a, b) => b.score - a.score)
     .map((entry) => entry.card),
-  [cards, selectedColors, popularityCutoff, showChallengePicks, showShitlisted, shitlistedIds, theme, complexityFilter, taste]);
+  [cards, selectedColors, popularityStart, popularityEnd, showChallengePicks, showShitlisted, shitlistedIds, theme, complexityFilter, taste]);
 
   const packCards = useMemo(() => packIds
     .map((id) => cards.find((card) => card.id === id))
     .filter((card): card is CommanderCard => Boolean(card)),
   [packIds, cards]);
   const current = packCards[0] ?? null;
-
-  useEffect(() => {
-    profileScrollRef.current?.scrollTo({ top: 0 });
-  }, [current?.id]);
 
   const availableForPack = useMemo(() => ranked.filter((card) => !seen.includes(card.id)), [ranked, seen]);
   const packPosition = current ? packTotal - packCards.length + 1 : packTotal;
@@ -353,6 +383,7 @@ export default function Home() {
   function reactTo(card: CommanderCard, reaction: Reaction, releaseY = 0) {
     if (swipeTimer.current !== null) return;
     const reactionScrollY = window.scrollY;
+    const preserveDesktopScroll = window.matchMedia("(min-width: 681px)").matches;
     const direction = reaction === "pass" ? -1 : 1;
     playSound(reaction === "pass" ? "swipe-left" : "swipe-right");
     const exitDistance = Math.max(window.innerWidth, 700) + 420;
@@ -366,7 +397,7 @@ export default function Home() {
       setDrag({ x: 0, y: 0, active: false });
       setExitDirection(0);
       swipeTimer.current = null;
-      if (!packFinished) window.requestAnimationFrame(() => window.requestAnimationFrame(() => {
+      if (!packFinished && preserveDesktopScroll) window.requestAnimationFrame(() => window.requestAnimationFrame(() => {
         const root = document.documentElement;
         const previousScrollBehavior = root.style.scrollBehavior;
         root.style.scrollBehavior = "auto";
@@ -407,7 +438,6 @@ export default function Home() {
 
   function openBooster() {
     if (packOpening || !availableForPack.length) return;
-    const openingScrollY = window.scrollY;
     playSound("pack");
     const nextPack = availableForPack.slice(0, PACK_SIZE);
     setPackIds(nextPack.map((card) => card.id));
@@ -417,19 +447,13 @@ export default function Home() {
       setPackOpened(true);
       setPackOpening(false);
       playSound("reveal");
-      window.requestAnimationFrame(() => window.requestAnimationFrame(() => {
-        const root = document.documentElement;
-        const previousScrollBehavior = root.style.scrollBehavior;
-        root.style.scrollBehavior = "auto";
-        window.scrollTo(0, openingScrollY);
-        root.style.scrollBehavior = previousScrollBehavior;
-      }));
     }, 1150);
   }
 
   function resetFilters() {
     setSelectedColors([]);
-    setPopularityCutoff(2000);
+    setPopularityStart(100);
+    setPopularityEnd(500);
     setTheme("Any theme");
     setComplexityFilter("any");
     setShowChallengePicks(false);
@@ -438,6 +462,21 @@ export default function Home() {
     setPackTotal(PACK_SIZE);
     setPackOpened(false);
     setPackOpening(false);
+  }
+
+  function applyFilters() {
+    if (swipeTimer.current !== null) {
+      window.clearTimeout(swipeTimer.current);
+      swipeTimer.current = null;
+    }
+    swipeOrigin.current = null;
+    setDrag({ x: 0, y: 0, active: false });
+    setExitDirection(0);
+    setPackIds([]);
+    setPackTotal(PACK_SIZE);
+    setPackOpened(false);
+    setPackOpening(false);
+    window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   useEffect(() => {
@@ -497,10 +536,10 @@ export default function Home() {
   }
 
   const swipeIntent = drag.x < -38 ? "reject" : drag.x > 38 ? "save" : "";
-  const currentDeckSearch = current ? deckSearch(current) : null;
+  const currentDeckSearches = current ? deckSearches(current) : [];
   const baseCardX = currentStackDepth * 8;
   const baseCardY = currentStackDepth * -7;
-  const baseCardAngle = currentStackDepth === 0 ? 0 : (currentStackDepth - 2) * 1.35;
+  const baseCardAngle = (currentStackDepth - 2) * 1.35;
   const baseCardScale = 1 - currentStackDepth * .009;
   const swipeCardStyle: CSSProperties = exitDirection
     ? {
@@ -550,12 +589,27 @@ export default function Home() {
                 {COLORS.map((color) => <button key={color.key} className={selectedColors.includes(color.key) ? "selected" : ""} onClick={() => toggleColor(color.key)} aria-label={color.label}><ManaSymbol symbol={`{${color.key}}`} symbols={symbols} /></button>)}
               </div>
             </fieldset>
-            <label className="filter-control popularity-control" htmlFor="popularity-cutoff"><span>Popularity cutoff <output>Outside top {popularityCutoff.toLocaleString()}</output></span><input id="popularity-cutoff" type="range" min="100" max="3000" step="100" value={popularityCutoff} onChange={(event) => setPopularityCutoff(Number(event.target.value))} /></label>
+            <div className="filter-control popularity-control">
+              <span>Popularity rank <output>#{popularityStart.toLocaleString()}–#{popularityEnd.toLocaleString()}</output></span>
+              <div
+                className="popularity-range"
+                style={{
+                  "--range-start": `${((popularityStart - POPULARITY_MIN) / (POPULARITY_MAX - POPULARITY_MIN)) * 100}%`,
+                  "--range-end": `${((popularityEnd - POPULARITY_MIN) / (POPULARITY_MAX - POPULARITY_MIN)) * 100}%`,
+                } as CSSProperties}
+              >
+                <input aria-label="Most popular rank" type="range" min={POPULARITY_MIN} max={popularityEnd - POPULARITY_STEP} step={POPULARITY_STEP} value={popularityStart} onChange={(event) => setPopularityStart(Number(event.target.value))} />
+                <input aria-label="Most obscure rank" type="range" min={popularityStart + POPULARITY_STEP} max={POPULARITY_MAX} step={POPULARITY_STEP} value={popularityEnd} onChange={(event) => setPopularityEnd(Number(event.target.value))} />
+              </div>
+            </div>
             <label className="filter-control" htmlFor="complexity"><span>Rules text</span><select id="complexity" value={complexityFilter} onChange={(event) => setComplexityFilter(event.target.value as Complexity)}><option value="any">Any complexity</option><option value="clean">Clean</option><option value="layered">Layered</option><option value="crunchy">Crunchy</option></select></label>
             <label className="filter-control" htmlFor="theme"><span>Theme</span><select id="theme" value={theme} onChange={(event) => setTheme(event.target.value)}>{themes.map((item) => <option key={item}>{item}</option>)}</select></label>
             <label className="challenge-toggle"><input type="checkbox" checked={showChallengePicks} onChange={(event) => setShowChallengePicks(event.target.checked)} /><span>Include challenge picks <small>+{Math.max(0, cards.length - recommendedTotal).toLocaleString()}</small></span></label>
             {communityRows.length > 0 && <label className="challenge-toggle"><input type="checkbox" checked={showShitlisted} onChange={(event) => setShowShitlisted(event.target.checked)} /><span>Include community rejects <small>+{communityRows.length}</small></span></label>}
-            <button className="reset-filters" onClick={resetFilters}>Reset</button>
+            <div className="filter-actions">
+              <button className="apply-filters" onClick={(event) => { applyFilters(); event.currentTarget.closest("details")?.removeAttribute("open"); }}>Apply &amp; new pack</button>
+              <button className="reset-filters" onClick={resetFilters}>Reset</button>
+            </div>
           </div>
         </details>
 
@@ -640,7 +694,7 @@ export default function Home() {
                 </div>
 
                 <article className="commander-profile">
-                  <div className="profile-scroll" ref={profileScrollRef}>
+                  <div className="profile-scroll">
                   <div className="profile-topline"><span>{current.setName} · {new Date(current.releasedAt).getFullYear()}</span>{current.challengePick && <em>Challenge</em>}</div>
                   <div className="commander-title"><h1>{current.name}</h1></div>
                   <p className="type-line">{current.typeLine}</p>
@@ -652,13 +706,15 @@ export default function Home() {
                     <span><strong>{money(current.price)}</strong> market</span>
                   </div>
 
-                  <p className="why-text">{current.why}</p>
                   {current.challengePick && <p className="challenge-note">{current.challengeReason}</p>}
                   {current.themes.length > 0 && <div className="theme-chips">{current.themes.slice(0, 4).map((item) => <button key={item} onClick={() => setTheme(item)}>{item}</button>)}</div>}
                   <div className="external-links">
-                    {currentDeckSearch && <a className="deck-search-link" href={currentDeckSearch.url} target="_blank" rel="noreferrer" aria-label={`${currentDeckSearch.label} on Scryfall`}>
-                      <strong>{currentDeckSearch.label} on Scryfall</strong><b aria-hidden="true">↗</b>
-                    </a>}
+                    {currentDeckSearches.length > 0 && <div className="scryfall-searches">
+                      <span>Explore on Scryfall</span>
+                      <div className="scryfall-search-grid">{currentDeckSearches.map((search) => <a key={search.label} className="scryfall-search-link" href={search.url} target="_blank" rel="noreferrer" aria-label={`Find ${search.label} cards on Scryfall`}>
+                        <strong>{search.label}</strong><b aria-hidden="true">↗</b>
+                      </a>)}</div>
+                    </div>}
                     <a className="deck-search-link" href={edhrecCommanderUrl(current.name)} target="_blank" rel="noreferrer" aria-label={`View ${current.name} on EDHREC`}>
                       <strong>View commander on EDHREC</strong><b aria-hidden="true">↗</b>
                     </a>
@@ -674,7 +730,10 @@ export default function Home() {
         <div className="shortlist-heading">
           <button onClick={() => setView("discover")}>← Discover</button>
           <h1>Liked commanders</h1>
-          <p>{shortlist.length} right-swiped on this device</p>
+          <div className="shortlist-summary">
+            <p>{shortlist.length} right-swiped on this device</p>
+            {shortlist.length > 0 && <button className="clear-pool" onClick={() => setShortlist([])}>Clear pool</button>}
+          </div>
         </div>
         {shortlist.length ? <div className="liked-grid">{shortlist.map((card) =>
           <button key={card.id} className="liked-card" onClick={() => selectCard(card)} aria-label={`Open ${card.name}`}>
@@ -704,7 +763,6 @@ export default function Home() {
                 : <div className="empty-shortlist"><h2>Nobody qualifies yet.</h2><p>Commanders appear here only after enough community reactions.</p><button onClick={() => setView("discover")}>Start voting</button></div>}
       </section>}
 
-      <footer>Card data and imagery via Scryfall · Popularity signals via EDHREC</footer>
     </main>
   );
 }

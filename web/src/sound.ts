@@ -5,6 +5,8 @@ type AudioContextConstructor = typeof AudioContext;
 export class SoundEngine {
   private context: AudioContext | null = null;
   private master: GainNode | null = null;
+  private packSample: HTMLAudioElement | null = null;
+  private packSampleSource: MediaElementAudioSourceNode | null = null;
   enabled = true;
 
   private setup() {
@@ -16,6 +18,11 @@ export class SoundEngine {
     this.master = this.context.createGain();
     this.master.gain.value = 0.72;
     this.master.connect(this.context.destination);
+    this.packSample = new Audio(`${import.meta.env.BASE_URL}assets/booster-pack-open.mp3`);
+    this.packSample.preload = "auto";
+    this.packSample.volume = 0.78;
+    this.packSampleSource = this.context.createMediaElementSource(this.packSample);
+    this.packSampleSource.connect(this.master);
     return this.context;
   }
 
@@ -84,6 +91,10 @@ export class SoundEngine {
         this.tone(230, 0.075, 0.035, 0, 155, "triangle");
         break;
       case "pack":
+        if (this.packSample) {
+          this.packSample.currentTime = 0;
+          void this.packSample.play().catch(() => {});
+        }
         this.noise(0.11, 0.07, 2200, 0);
         this.noise(0.13, 0.075, 3100, 0.13);
         this.noise(0.15, 0.08, 2600, 0.29);
@@ -115,14 +126,24 @@ export class SoundEngine {
 
   setEnabled(enabled: boolean) {
     this.enabled = enabled;
+    if (!enabled && this.packSample) {
+      this.packSample.pause();
+      this.packSample.currentTime = 0;
+    }
     if (!this.master || !this.context) return;
     this.master.gain.cancelScheduledValues(this.context.currentTime);
     this.master.gain.setTargetAtTime(enabled ? 0.72 : 0.0001, this.context.currentTime, 0.015);
   }
 
   close() {
+    if (this.packSample) {
+      this.packSample.pause();
+      this.packSample.currentTime = 0;
+    }
     if (this.context) void this.context.close();
     this.context = null;
     this.master = null;
+    this.packSample = null;
+    this.packSampleSource = null;
   }
 }

@@ -1,13 +1,3 @@
-const TRIBAL_TAGS = new Set([
-  "Angels", "Assassins", "Bats", "Beasts", "Birds", "Cats", "Clerics", "Demons",
-  "Dinosaurs", "Dogs", "Dragons", "Druids", "Dwarves", "Eldrazi", "Elves", "Faeries",
-  "Frogs", "Giants", "Goblins", "Golems", "Horses", "Humans", "Hydras", "Insects",
-  "Knights", "Kor", "Merfolk", "Mutants", "Ninjas", "Oozes", "Orcs", "Phyrexians",
-  "Pirates", "Rats", "Robots", "Rogues", "Saprolings", "Shamans", "Shapeshifters",
-  "Slivers", "Soldiers", "Spirits", "Thopters", "Treefolk", "Vampires", "Warriors",
-  "Werewolves", "Wizards", "Wolves", "Wraiths", "Zombies",
-]);
-
 const IRREGULAR_PLURALS = new Map([
   ["dwarf", "dwar(?:f|ves)"],
   ["elf", "el(?:f|ves)"],
@@ -31,24 +21,21 @@ function subtypePattern(subtype) {
   return [...words.map(escapeRegExp), plural].join("\\s+");
 }
 
-function creatureSubtypes(typeLine) {
-  return String(typeLine)
-    .split("//")
-    .flatMap((face) => {
-      const [cardTypes = "", subtypeText = ""] = face.split(/\s+\u2014\s+/, 2);
-      if (!/\bcreature\b/i.test(cardTypes)) return [];
-      return subtypeText.trim().split(/\s+/);
-    })
-    .filter((item) => item && item.toLowerCase() !== "background");
-}
-
-function referencesCreatureType(text, creatureType) {
+function supportsCreatureType(text, creatureType) {
   const kind = subtypePattern(creatureType);
-  return new RegExp(`\\b(?:other|each|every|another|target|one or more|number of|for each|all)\\s+${kind}\\b`).test(text)
-    || new RegExp(`\\b${kind}\\s+(?:you control|cards?|spells?|creatures?(?!\\s+tokens?\\b)|permanents?|tokens?|get|gets|have|gain|enter|enters|die|dies|attack|attacks)\\b`).test(text);
+  return [
+    `\\b(?:other|each|every|all)\\s+${kind}\\s+(?:you control\\s+)?(?:are|get|gets|have|has|gain|gains|cost|can|may|enter|enters|attack|attacks|die|dies)\\b`,
+    `\\b${kind}\\s+(?:spells?|cards?|creatures?|permanents?)\\s+(?:you control|you own|you cast|in your|from your)\\b`,
+    `\\bwhenever\\s+(?:an?|another|one or more|other)\\s+${kind}\\s+(?:you control\\s+)?(?:enters|attacks|dies|leaves|deals|becomes|is put)\\b`,
+    `\\b(?:for each|number of)\\s+${kind}\\b`,
+    `\\b(?:cast|sacrifice|tap|untap|reveal|return|discard|exile)\\s+(?:an?|another|one or more|any number of|up to \\w+)\\s+${kind}\\b`,
+    `\\b(?:regenerate|untap)\\s+(?:another\\s+)?target\\s+${kind}\\b`,
+    `\\bput\\s+[^.]+?counters?\\s+on\\s+(?:another\\s+)?target\\s+${kind}(?:\\s+you control)?\\b`,
+    `\\b${kind}\\s+cards?\\s+(?:from among|in your|you reveal|you own)\\b`,
+  ].some((pattern) => new RegExp(pattern).test(text));
 }
 
-export function deriveTribes({ oracleText = "", typeLine = "", existingThemes = [], creatureTypes = [] }) {
+export function deriveTribes({ oracleText = "", typeLine = "", existingThemes: _existingThemes = [], creatureTypes = [] }) {
   const text = String(oracleText).toLowerCase();
   const catalog = Array.from(new Set(creatureTypes.map(String).filter(Boolean)));
   const tribes = [];
@@ -56,38 +43,26 @@ export function deriveTribes({ oracleText = "", typeLine = "", existingThemes = 
     if (creatureType && !tribes.includes(creatureType)) tribes.push(creatureType);
   };
 
-  for (const theme of existingThemes) {
-    const match = catalog.find((creatureType) => new RegExp(`^${subtypePattern(creatureType)}$`, "i").test(String(theme)));
-    add(match);
-  }
-
-  const catalogByName = new Map(catalog.map((item) => [item.toLowerCase(), item]));
-  for (const subtype of creatureSubtypes(typeLine)) {
-    const canonical = catalogByName.get(subtype.toLowerCase());
-    if (canonical && referencesCreatureType(text, canonical)) add(canonical);
-  }
-
   for (const creatureType of catalog) {
-    if (referencesCreatureType(text, creatureType)) add(creatureType);
+    if (supportsCreatureType(text, creatureType)) add(creatureType);
   }
 
   return tribes.slice(0, 4);
 }
 
-function referencesOwnCreatureType(text, typeLine) {
-  if (/creature type|chosen type|of the chosen type/.test(text)) return true;
-  return creatureSubtypes(typeLine).some((subtype) => referencesCreatureType(text, subtype));
+function supportsFlexibleTribe(text) {
+  return /choose a creature type|chosen creature type|every creature type|all creature types/.test(text);
 }
 
 export function deriveThemeLabels({ oracleText = "", typeLine = "", existingThemes = [], creatureTypes = [], tribes = null }) {
   const text = String(oracleText).toLowerCase();
   const type = String(typeLine).toLowerCase();
-  const normalized = existingThemes.map((theme) => theme === "Typal" ? "Tribal" : theme);
+  const normalized = existingThemes.filter((theme) => theme !== "Tribal" && theme !== "Typal");
   const detectedTribes = tribes ?? deriveTribes({ oracleText, typeLine, existingThemes, creatureTypes });
   const themes = new Set(normalized);
   const add = (condition, label) => { if (condition) themes.add(label); };
 
-  add(detectedTribes.length > 0 || normalized.some((theme) => TRIBAL_TAGS.has(theme)) || referencesOwnCreatureType(text, String(typeLine)), "Tribal");
+  add(detectedTribes.length > 0 || supportsFlexibleTribe(text), "Tribal");
   add(/\+1\/\+1 counters?/.test(text), "+1/+1 Counters");
   add(/counter on|counters on|proliferate/.test(text), "Counters");
   add(/create .* tokens?|tokens? you control|populate/.test(text), "Tokens");
