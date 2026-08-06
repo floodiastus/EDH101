@@ -26,6 +26,8 @@ type CommanderCard = {
   obscurityScore: number;
   why: string;
   caution: string;
+  challengePick: boolean;
+  challengeReason: string;
 };
 
 type SignatureCard = {
@@ -113,6 +115,7 @@ export default function Home() {
   const [minObscurity, setMinObscurity] = useState(65);
   const [theme, setTheme] = useState("Any theme");
   const [complexityFilter, setComplexityFilter] = useState<Complexity>("any");
+  const [showChallengePicks, setShowChallengePicks] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [seen, setSeen] = useState<string[]>([]);
   const [shortlist, setShortlist] = useState<CommanderCard[]>([]);
@@ -170,9 +173,11 @@ export default function Home() {
 
   const themes = useMemo(() => {
     const counts = new Map<string, number>();
-    for (const card of cards) for (const item of card.themes) counts.set(item, (counts.get(item) ?? 0) + 1);
+    for (const card of cards) if (showChallengePicks || !card.challengePick) for (const item of card.themes) counts.set(item, (counts.get(item) ?? 0) + 1);
     return ["Any theme", ...Array.from(counts.entries()).filter(([, count]) => count >= 2).sort((a, b) => b[1] - a[1]).slice(0, 10).map(([item]) => item)];
-  }, [cards]);
+  }, [cards, showChallengePicks]);
+
+  const recommendedTotal = useMemo(() => cards.filter((card) => !card.challengePick).length, [cards]);
 
   const ranked = useMemo(() => {
     return cards
@@ -183,12 +188,13 @@ export default function Home() {
         return selected === identity;
       })
       .filter((card) => card.obscurityScore >= minObscurity)
+      .filter((card) => showChallengePicks || !card.challengePick)
       .filter((card) => theme === "Any theme" || card.themes.includes(theme))
       .filter((card) => complexityFilter === "any" || complexity(card) === complexityFilter)
       .map((card) => ({ card, score: card.obscurityScore + card.themes.reduce((sum, item) => sum + (taste[item] ?? 0) * 7, 0) }))
       .sort((a, b) => b.score - a.score || b.card.popularityRank - a.card.popularityRank)
       .map((entry) => entry.card);
-  }, [cards, selectedColors, minObscurity, theme, complexityFilter, taste]);
+  }, [cards, selectedColors, minObscurity, showChallengePicks, theme, complexityFilter, taste]);
 
   const current = useMemo(() => ranked.find((card) => card.id === activeId && !seen.includes(card.id)) ?? ranked.find((card) => !seen.includes(card.id)) ?? null, [ranked, activeId, seen]);
   const comingUp = useMemo(() => ranked.filter((card) => card.id !== current?.id && !seen.includes(card.id)).slice(0, 5), [ranked, current, seen]);
@@ -241,7 +247,7 @@ export default function Home() {
           <aside className="filter-rail">
             <div className="crate-graphic">
               <img src={import.meta.env.BASE_URL + "crate-dig.png"} alt="A hand digging through a crate of mysterious card sleeves" />
-              <div><span>THE UNDERPLAYED ARCHIVE</span><b>Find the legend everyone missed.</b></div>
+              <div><span>{recommendedTotal.toLocaleString()} RECOMMENDED · {cards.length.toLocaleString()} ARCHIVED</span><b>Find the legend everyone missed.</b></div>
             </div>
             <div className="rail-heading"><span>01</span><div><b>TUNE THE CRATE</b><p>Exact color identity</p></div></div>
             <div className="color-filter">
@@ -264,6 +270,12 @@ export default function Home() {
                 <option value="crunchy">Delightfully crunchy</option>
               </select>
             </div>
+
+            <label className="challenge-toggle">
+              <input type="checkbox" checked={showChallengePicks} onChange={(event) => setShowChallengePicks(event.target.checked)} />
+              <span><b>Show challenge picks</b><small>Include {Math.max(0, cards.length - recommendedTotal).toLocaleString()} mechanically flat or ultra-narrow legends</small></span>
+              <i aria-hidden="true" />
+            </label>
 
             <div className="filter-block">
               <label><span>Mechanical neighborhood</span></label>
@@ -290,7 +302,7 @@ export default function Home() {
               </div>
 
               <article className="commander-profile">
-                <div className="profile-topline"><ColorPips colors={current.colorIdentity} symbols={symbols} /><span>{current.setName} · {new Date(current.releasedAt).getFullYear()}</span></div>
+                <div className="profile-topline"><ColorPips colors={current.colorIdentity} symbols={symbols} /><span>{current.setName} · {new Date(current.releasedAt).getFullYear()}</span>{current.challengePick && <em className="challenge-badge">Challenge pick</em>}</div>
                 <div className="commander-title"><h1>{current.name}</h1><ManaCost cost={current.manaCost} symbols={symbols} /></div>
                 <p className="type-line">{current.typeLine}</p>
                 <p className="oracle-text">{current.oracleText}</p>
@@ -303,6 +315,7 @@ export default function Home() {
                 </div>
 
                 <div className="editorial-note"><span>WHY IT'S A DEEP CUT</span><p>{current.why}</p></div>
+                {current.challengePick && <div className="challenge-note"><span>WHY IT'S HIDDEN BY DEFAULT</span><p>{current.challengeReason}</p></div>}
                 <div className="theme-chips">{current.themes.slice(0, 5).map((item) => <button key={item} onClick={() => setTheme(item)}>{item}</button>)}</div>
 
                 {current.signatures.length > 0 && <div className="signature-block"><span>SIGNATURE LEADS</span><div className="signature-cards">{current.signatures.map((item) => <a key={item.id} href={item.scryfallUrl} target="_blank" rel="noreferrer"><img src={item.imageUrl} alt="" loading="lazy" referrerPolicy="no-referrer" /><b>{item.name}</b></a>)}</div></div>}

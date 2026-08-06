@@ -8,7 +8,8 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build && node scripts/stage-pages.mjs",
     "preview": "vite preview",
-    "data:update": "node scripts/update-data.mjs"
+    "data:update": "node scripts/update-data.mjs",
+    "data:classify": "node scripts/apply-challenge-filter.mjs"
   },
   "dependencies": {
     "react": "^19.1.1",

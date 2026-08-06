@@ -1,4 +1,5 @@
 import { mkdir, writeFile } from "node:fs/promises";
+import { challengeRating } from "./challenge-rating.mjs";
 
 const headers = {
   Accept: "application/json;q=0.9,*/*;q=0.8",
@@ -218,7 +219,10 @@ async function main() {
   console.log(`Layering detailed popularity data onto ${enrichmentPool.length} promising deep cuts...`);
   const enriched = await mapLimit(enrichmentPool, 5, (entry) => enrich(entry, total));
   const enrichedById = new Map(enriched.filter(Boolean).map((card) => [card.id, card]));
-  const cards = pool.map((card, index) => enrichedById.get(String(card.id)) ?? baseCard(card, total - index, total));
+  const cards = pool.map((card, index) => {
+    const result = enrichedById.get(String(card.id)) ?? baseCard(card, total - index, total);
+    return { ...result, ...challengeRating(result) };
+  });
   const symbols = {};
   for (const item of Array.isArray(symbolData.data) ? symbolData.data.map(record) : []) {
     if (item.symbol && item.svg_uri) symbols[String(item.symbol)] = String(item.svg_uri);
