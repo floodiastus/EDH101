@@ -156,6 +156,8 @@ button:disabled { opacity: .45; cursor: wait; }
 .commander-profile h1 { margin: 0; font: 700 clamp(37px, 4.2vw, 68px)/.92 Georgia, "Times New Roman", serif; letter-spacing: -.052em; text-wrap: balance; }
 .type-line { margin: 0 0 20px; color: var(--acid); font: 700 8px var(--font-geist-mono), monospace; letter-spacing: .07em; }
 .oracle-text { max-width: 580px; margin: 0; padding: 15px 0 15px 17px; white-space: pre-line; color: #c6beaf; border-left: 2px solid rgba(238,231,216,.16); font-family: Georgia, "Times New Roman", serif; font-size: 13px; line-height: 1.55; }
+.oracle-text .oracle-symbol { width: 1.08em; height: 1.08em; margin: 0 .08em; vertical-align: -.16em; }
+.oracle-text .mana-fallback { width: 1.08em; height: 1.08em; margin: 0 .08em; vertical-align: -.16em; font-size: .5em; line-height: 1; }
 
 .color-pips, .mana-cost { display: inline-flex; align-items: center; gap: 4px; }
 .mana-symbol { width: 20px; height: 20px; display: inline-block; flex: 0 0 auto; filter: drop-shadow(0 1px 1px rgba(0,0,0,.72)); }

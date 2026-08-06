@@ -89,6 +89,14 @@ function ManaCost({ cost, symbols }: { cost: string; symbols: Record<string, str
   return <span className="mana-cost" aria-label={"Mana cost " + cost}>{parts.map((symbol, index) => <ManaSymbol key={symbol + index} symbol={symbol} symbols={symbols} />)}</span>;
 }
 
+function OracleText({ text, symbols }: { text: string; symbols: Record<string, string> }) {
+  const parts = text.split(/(\{[^}]+\})/g).filter(Boolean);
+  return <p className="oracle-text">{parts.map((part, index) => /^\{[^}]+\}$/.test(part)
+    ? <ManaSymbol key={part + index} symbol={part} symbols={symbols} className="oracle-symbol" />
+    : part
+  )}</p>;
+}
+
 function ColorPips({ colors, symbols }: { colors: string[]; symbols: Record<string, string> }) {
   const pips = colors.length ? colors : ["C"];
   return <span className="color-pips" aria-label={(colors.length ? colors : ["Colorless"]).join(", ")}>{pips.map((color) => <ManaSymbol key={color} symbol={`{${color}}`} symbols={symbols} />)}</span>;
@@ -301,7 +309,7 @@ export default function Home() {
                 <div className="profile-topline"><ColorPips colors={current.colorIdentity} symbols={symbols} /><span>{current.setName} · {new Date(current.releasedAt).getFullYear()}</span>{current.challengePick && <em className="challenge-badge">Challenge pick</em>}</div>
                 <div className="commander-title"><h1>{current.name}</h1><ManaCost cost={current.manaCost} symbols={symbols} /></div>
                 <p className="type-line">{current.typeLine}</p>
-                <p className="oracle-text">{current.oracleText}</p>
+                <OracleText text={current.oracleText} symbols={symbols} />
 
                 <div className="obscurity-row">
                   <div className="obscurity-score"><span>OBSCURITY</span><strong>{current.obscurityScore}</strong><small>/100</small></div>
