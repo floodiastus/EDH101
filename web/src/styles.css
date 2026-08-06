@@ -95,16 +95,13 @@ button:focus-visible, summary:focus-visible, select:focus-visible, input:focus-v
 .profile-topline { display: flex; align-items: center; gap: 10px; color: #827b6e; font-size: 8px; }
 .profile-topline > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .profile-topline em { padding: 4px 6px; color: #160f0a; background: var(--red); font: 800 6px var(--font-geist-mono), monospace; font-style: normal; text-transform: uppercase; }
-.commander-title { margin: 15px 0 8px; display: flex; align-items: flex-end; justify-content: space-between; gap: 18px; }
+.commander-title { margin: 15px 0 8px; }
 .commander-title h1 { margin: 0; font: 700 clamp(39px, 5vw, 68px)/.94 Georgia, "Times New Roman", serif; letter-spacing: -.05em; text-wrap: balance; }
 .type-line { margin: 0 0 18px; color: var(--acid); font: 700 8px var(--font-geist-mono), monospace; letter-spacing: .06em; }
 .oracle-text { max-width: 580px; margin: 0; padding: 14px 0 14px 16px; white-space: pre-line; color: #c9c1b3; border-left: 2px solid rgba(238,231,216,.16); font-family: Georgia, "Times New Roman", serif; font-size: 14px; line-height: 1.5; }
 .oracle-text .oracle-symbol { width: 1.08em; height: 1.08em; margin: 0 .08em; vertical-align: -.16em; }
 .oracle-text .mana-fallback { width: 1.08em; height: 1.08em; margin: 0 .08em; vertical-align: -.16em; font-size: .5em; line-height: 1; }
-.color-pips, .mana-cost { display: inline-flex; align-items: center; gap: 4px; }
 .mana-symbol { width: 18px; height: 18px; display: inline-block; flex: 0 0 auto; filter: drop-shadow(0 1px 1px rgba(0,0,0,.7)); }
-.mana-cost { flex-wrap: wrap; justify-content: flex-end; }
-.mana-cost .mana-symbol { width: 25px; height: 25px; }
 .mana-fallback { width: 18px; height: 18px; display: inline-grid; place-items: center; border-radius: 50%; color: #18150f; background: #bbb3a4; font: 900 7px var(--font-geist-mono), monospace; }
 
 .card-meta { margin: 20px 0 17px; display: flex; flex-wrap: wrap; gap: 7px; }
@@ -143,9 +140,7 @@ button:focus-visible, summary:focus-visible, select:focus-visible, input:focus-v
 .saved-image img { width: 100%; height: 100%; min-height: 220px; display: block; object-fit: cover; }
 .saved-copy { min-width: 0; padding: 16px; }
 .saved-copy > div { display: flex; justify-content: space-between; align-items: center; }
-.saved-copy .mana-symbol { width: 15px; height: 15px; }
-.saved-copy > .mana-cost { margin-top: 9px; }
-.saved-copy > .mana-cost .mana-symbol { width: 18px; height: 18px; }
+.saved-actions { justify-content: flex-end !important; }
 .saved-name { width: 100%; margin-top: 18px; padding: 0; display: block; border: 0; color: var(--cream); background: transparent; text-align: left; font: 700 22px/.98 Georgia, serif; }
 .saved-copy p { color: #7d766a; font: 700 7px var(--font-geist-mono), monospace; line-height: 1.4; }
 .remove-button { width: 28px; height: 28px; padding: 0; border: 0; color: #756e63; background: transparent; font-size: 18px; }
@@ -187,9 +182,8 @@ footer { min-height: 48px; padding: 0 18px; display: grid; place-items: center; 
   .swipe-hint { margin: 13px -10px 0; display: flex; justify-content: space-between; color: #777064; font: 700 7px var(--font-geist-mono), monospace; text-transform: uppercase; letter-spacing: .03em; }
   .commander-profile { margin-top: 29px; }
   .profile-topline { font-size: 7px; }
-  .commander-title { margin-top: 13px; align-items: flex-start; flex-direction: column; gap: 10px; }
+  .commander-title { margin-top: 13px; }
   .commander-title h1 { font-size: clamp(37px, 12vw, 50px); }
-  .mana-cost .mana-symbol { width: 23px; height: 23px; }
   .oracle-text { font-size: 13px; }
   .card-meta { margin-block: 16px 14px; }
   .card-meta span { padding: 6px 7px; }

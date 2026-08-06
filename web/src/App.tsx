@@ -79,23 +79,12 @@ function ManaSymbol({ symbol, symbols, className = "" }: { symbol: string; symbo
     : <i className={"mana-fallback " + className}>{symbol.replace(/[{}]/g, "")}</i>;
 }
 
-function ManaCost({ cost, symbols }: { cost: string; symbols: Record<string, string> }) {
-  const parts = cost.match(/\{[^}]+\}/g) ?? [];
-  return <span className="mana-cost" aria-label={"Mana cost " + cost}>{parts.map((symbol, index) => <ManaSymbol key={symbol + index} symbol={symbol} symbols={symbols} />)}</span>;
-}
-
 function OracleText({ text, symbols }: { text: string; symbols: Record<string, string> }) {
   const parts = text.split(/(\{[^}]+\})/g).filter(Boolean);
   return <p className="oracle-text">{parts.map((part, index) => /^\{[^}]+\}$/.test(part)
     ? <ManaSymbol key={part + index} symbol={part} symbols={symbols} className="oracle-symbol" />
     : part
   )}</p>;
-}
-
-function ColorPips({ colors, symbols }: { colors: string[]; symbols: Record<string, string> }) {
-  const pips = colors.length ? colors : ["C"];
-  const label = colors.length ? colors : ["Colorless"];
-  return <span className="color-pips" aria-label={label.join(", ")}>{pips.map((color) => <ManaSymbol key={color} symbol={`{${color}}`} symbols={symbols} />)}</span>;
 }
 
 export default function Home() {
@@ -379,8 +368,8 @@ export default function Home() {
                 </div>
 
                 <article className="commander-profile">
-                  <div className="profile-topline"><ColorPips colors={current.colorIdentity} symbols={symbols} /><span>{current.setName} · {new Date(current.releasedAt).getFullYear()}</span>{current.challengePick && <em>Challenge</em>}</div>
-                  <div className="commander-title"><h1>{current.name}</h1><ManaCost cost={current.manaCost} symbols={symbols} /></div>
+                  <div className="profile-topline"><span>{current.setName} · {new Date(current.releasedAt).getFullYear()}</span>{current.challengePick && <em>Challenge</em>}</div>
+                  <div className="commander-title"><h1>{current.name}</h1></div>
                   <p className="type-line">{current.typeLine}</p>
                   <OracleText text={current.oracleText} symbols={symbols} />
 
@@ -415,9 +404,8 @@ export default function Home() {
         {shortlist.length ? <div className="shortlist-grid">{shortlist.map((card) => <article key={card.id} className="saved-card">
           <button className="saved-image" onClick={() => selectCard(card)}><img src={card.imageUrl} alt={card.name} loading="lazy" referrerPolicy="no-referrer" /></button>
           <div className="saved-copy">
-            <div><ColorPips colors={card.colorIdentity} symbols={symbols} /><button className="remove-button" onClick={() => setShortlist((items) => items.filter((item) => item.id !== card.id))} aria-label={"Remove " + card.name}>×</button></div>
+            <div className="saved-actions"><button className="remove-button" onClick={() => setShortlist((items) => items.filter((item) => item.id !== card.id))} aria-label={"Remove " + card.name}>×</button></div>
             <button className="saved-name" onClick={() => selectCard(card)}>{card.name}</button>
-            <ManaCost cost={card.manaCost} symbols={symbols} />
             <p>{card.obscurityScore}/100 obscure · {card.deckCount !== null ? card.deckCount.toLocaleString() + " decks" : "#" + card.popularityRank.toLocaleString()}</p>
           </div>
         </article>)}</div>
@@ -436,9 +424,8 @@ export default function Home() {
               : shitlistCards.length ? <div className="shortlist-grid">{shitlistCards.map(({ card, row }) => <article key={card.id} className="saved-card shitlisted-card">
                 <button className="saved-image" onClick={() => { setShowShitlisted(true); selectCard(card); }}><img src={card.imageUrl} alt={card.name} loading="lazy" referrerPolicy="no-referrer" /></button>
                 <div className="saved-copy">
-                  <div><ColorPips colors={card.colorIdentity} symbols={symbols} /><strong className="reject-rate">{row.rejectionRate}% rejected</strong></div>
+                  <div><strong className="reject-rate">{row.rejectionRate}% rejected</strong></div>
                   <button className="saved-name" onClick={() => { setShowShitlisted(true); selectCard(card); }}>{card.name}</button>
-                  <ManaCost cost={card.manaCost} symbols={symbols} />
                   <p>{row.rejects} rejects · {row.totalVotes} total votes</p>
                 </div>
               </article>)}</div>
