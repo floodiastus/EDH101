@@ -179,7 +179,7 @@ export default function Home() {
     return ["Any theme", ...Array.from(counts.entries())
       .filter(([, count]) => count >= 2)
       .sort((a, b) => b[1] - a[1])
-      .slice(0, 16)
+      .slice(0, 40)
       .map(([item]) => item)];
   }, [cards, showChallengePicks]);
 

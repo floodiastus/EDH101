@@ -1,5 +1,6 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { challengeRating } from "./challenge-rating.mjs";
+import { deriveThemeLabels } from "./theme-taxonomy.mjs";
 
 const headers = {
   Accept: "application/json;q=0.9,*/*;q=0.8",
@@ -47,26 +48,11 @@ function mechanicalInterest(text) {
 }
 
 function deriveThemes(card, tags) {
-  const text = oracleText(card).toLowerCase();
-  const type = String(card.type_line ?? "").toLowerCase();
-  const themes = new Set(tags.map((tag) => tag.trim()).filter(Boolean));
-  const add = (condition, label) => { if (condition) themes.add(label); };
-  add(/artifact/.test(text) || /artifact/.test(type), "Artifacts");
-  add(/create .* token|tokens? you control|populate/.test(text), "Tokens");
-  add(/graveyard|mill|surveil/.test(text), "Graveyard");
-  add(/instant|sorcery|noncreature spell|magecraft/.test(text), "Spellslinger");
-  add(/attack|combat|attacks/.test(text), "Combat");
-  add(/counter on|counters on|proliferate/.test(text), "Counters");
-  add(/sacrifice|dies|died/.test(text), "Sacrifice");
-  add(/landfall|land card|lands? you control/.test(text), "Lands");
-  add(/gain life|lifelink|life total/.test(text), "Lifegain");
-  add(/exile .* return|enters the battlefield|leaves the battlefield/.test(text), "Blink");
-  add(/aura|equipment|modified/.test(text), "Voltron");
-  add(/each opponent|opponent chooses|voting|vote|goad|monarch/.test(text), "Politics");
-  add(/coin|random|choose at random|roll a d/.test(text), "Chaos");
-  add(/creature type|choose a creature type|kindred/.test(text), "Typal");
-  add(/draw|investigate|clue/.test(text), "Card Draw");
-  return Array.from(themes).slice(0, 7);
+  return deriveThemeLabels({
+    oracleText: oracleText(card),
+    typeLine: String(card.type_line ?? ""),
+    existingThemes: tags.map((tag) => tag.trim()).filter(Boolean),
+  });
 }
 
 function explain(themes, text) {

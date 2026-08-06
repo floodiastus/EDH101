@@ -9,7 +9,8 @@
     "build": "tsc --noEmit && vite build && node scripts/stage-pages.mjs",
     "preview": "vite preview",
     "data:update": "node scripts/update-data.mjs",
-    "data:classify": "node scripts/apply-challenge-filter.mjs"
+    "data:classify": "node scripts/apply-challenge-filter.mjs",
+    "data:themes": "node scripts/apply-theme-taxonomy.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.2",
