@@ -245,11 +245,7 @@ export default function Home() {
       {view === "discover" && <>
         <section className="discovery-shell">
           <aside className="filter-rail">
-            <div className="crate-graphic">
-              <img src={import.meta.env.BASE_URL + "crate-dig.png"} alt="A hand digging through a crate of mysterious card sleeves" />
-              <div><span>{recommendedTotal.toLocaleString()} RECOMMENDED · {cards.length.toLocaleString()} ARCHIVED</span><b>Find the legend everyone missed.</b></div>
-            </div>
-            <div className="rail-heading"><span>01</span><div><b>TUNE THE CRATE</b><p>Exact color identity</p></div></div>
+            <div className="rail-heading"><span>01</span><div><b>TUNE THE CRATE</b><p>{recommendedTotal.toLocaleString()} recommended · {cards.length.toLocaleString()} archived</p></div></div>
             <div className="color-filter">
               {COLORS.map((color) => <button key={color.key} className={selectedColors.includes(color.key) ? "selected" : ""} onClick={() => toggleColor(color.key)} aria-label={color.label}><ManaSymbol symbol={`{${color.key}}`} symbols={symbols} /></button>)}
             </div>
