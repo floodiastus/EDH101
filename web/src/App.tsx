@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import Skeleton from "react-loading-skeleton";
 import "react-loading-skeleton/dist/skeleton.css";
+import { castCommunityVote, communityConfigured, fetchCommunityShitlist, type CommunityShitlistRow } from "./community";
 import "./styles.css";
 
 type SignatureCard = {
@@ -37,7 +38,7 @@ type CommanderCard = {
   challengeReason: string;
 };
 
-type View = "discover" | "shortlist";
+type View = "discover" | "shortlist" | "shitlist";
 type Complexity = "any" | "clean" | "layered" | "crunchy";
 type Reaction = "pass" | "intrigue" | "love";
 
@@ -105,6 +106,7 @@ export default function Home() {
   const [theme, setTheme] = useState("Any theme");
   const [complexityFilter, setComplexityFilter] = useState<Complexity>("any");
   const [showChallengePicks, setShowChallengePicks] = useState(false);
+  const [showShitlisted, setShowShitlisted] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [seen, setSeen] = useState<string[]>([]);
   const [shortlist, setShortlist] = useState<CommanderCard[]>([]);
@@ -112,6 +114,9 @@ export default function Home() {
   const [view, setView] = useState<View>("discover");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [communityRows, setCommunityRows] = useState<CommunityShitlistRow[]>([]);
+  const [communityLoading, setCommunityLoading] = useState(communityConfigured);
+  const [communityError, setCommunityError] = useState("");
   const [storageReady, setStorageReady] = useState(false);
   const [drag, setDrag] = useState({ x: 0, y: 0, active: false });
   const swipeOrigin = useRef<{ x: number; y: number; pointerId: number } | null>(null);
@@ -138,7 +143,24 @@ export default function Home() {
 
   useEffect(() => {
     void loadCommanders();
+    void loadCommunityShitlist();
   }, []);
+
+  async function loadCommunityShitlist() {
+    if (!communityConfigured) {
+      setCommunityLoading(false);
+      return;
+    }
+    setCommunityLoading(true);
+    setCommunityError("");
+    try {
+      setCommunityRows(await fetchCommunityShitlist());
+    } catch (communityLoadError) {
+      setCommunityError(communityLoadError instanceof Error ? communityLoadError.message : "Community votes are unavailable.");
+    } finally {
+      setCommunityLoading(false);
+    }
+  }
 
   async function loadCommanders() {
     setLoading(true);
@@ -173,6 +195,11 @@ export default function Home() {
   }, [cards, showChallengePicks]);
 
   const recommendedTotal = useMemo(() => cards.filter((card) => !card.challengePick).length, [cards]);
+  const shitlistedIds = useMemo(() => new Set(communityRows.map((row) => row.cardId)), [communityRows]);
+  const shitlistCards = useMemo(() => communityRows
+    .map((row) => ({ row, card: cards.find((card) => card.id === row.cardId) }))
+    .filter((entry): entry is { row: CommunityShitlistRow; card: CommanderCard } => Boolean(entry.card)),
+  [communityRows, cards]);
 
   const ranked = useMemo(() => cards
     .filter((card) => {
@@ -183,12 +210,13 @@ export default function Home() {
     })
     .filter((card) => card.obscurityScore >= minObscurity)
     .filter((card) => showChallengePicks || !card.challengePick)
+    .filter((card) => showShitlisted || !shitlistedIds.has(card.id))
     .filter((card) => theme === "Any theme" || card.themes.includes(theme))
     .filter((card) => complexityFilter === "any" || complexity(card) === complexityFilter)
     .map((card) => ({ card, score: card.obscurityScore + card.themes.reduce((sum, item) => sum + (taste[item] ?? 0) * 7, 0) }))
     .sort((a, b) => b.score - a.score)
     .map((entry) => entry.card),
-  [cards, selectedColors, minObscurity, showChallengePicks, theme, complexityFilter, taste]);
+  [cards, selectedColors, minObscurity, showChallengePicks, showShitlisted, shitlistedIds, theme, complexityFilter, taste]);
 
   const current = useMemo(
     () => ranked.find((card) => card.id === activeId && !seen.includes(card.id)) ?? ranked.find((card) => !seen.includes(card.id)) ?? null,
@@ -216,6 +244,13 @@ export default function Home() {
     if (reaction === "love") {
       setShortlist((items) => items.some((item) => item.id === card.id) ? items : [...items, card]);
     }
+    if (communityConfigured) {
+      void castCommunityVote(card.id, reaction)
+        .then((submitted) => {
+          if (submitted && reaction === "pass") void loadCommunityShitlist();
+        })
+        .catch((voteError) => setCommunityError(voteError instanceof Error ? voteError.message : "Your community vote could not be saved."));
+    }
   }
 
   function selectCard(card: CommanderCard) {
@@ -237,6 +272,7 @@ export default function Home() {
     setTheme("Any theme");
     setComplexityFilter("any");
     setShowChallengePicks(false);
+    setShowShitlisted(false);
     setSeen([]);
     setActiveId(null);
   }
@@ -291,6 +327,9 @@ export default function Home() {
           <button className={view === "shortlist" ? "shortlist-link active" : "shortlist-link"} onClick={() => setView("shortlist")}>
             Shortlist <b>{shortlist.length}</b>
           </button>
+          {communityConfigured && <button className={view === "shitlist" ? "shitlist-link active" : "shitlist-link"} onClick={() => { setView("shitlist"); void loadCommunityShitlist(); }}>
+            Shit List <b>{communityRows.length}</b>
+          </button>}
           <button className="shuffle-button" onClick={dealNewStack} aria-label="Shuffle commander stack"><span>↻</span> Shuffle</button>
         </div>
       </header>
@@ -305,10 +344,11 @@ export default function Home() {
                 {COLORS.map((color) => <button key={color.key} className={selectedColors.includes(color.key) ? "selected" : ""} onClick={() => toggleColor(color.key)} aria-label={color.label}><ManaSymbol symbol={`{${color.key}}`} symbols={symbols} /></button>)}
               </div>
             </fieldset>
-            <label className="filter-control" htmlFor="min-obscurity"><span>Obscurity <output>{minObscurity}+</output></span><input id="min-obscurity" type="range" min="35" max="95" step="5" value={minObscurity} onChange={(event) => setMinObscurity(Number(event.target.value))} /></label>
+            <label className="filter-control" htmlFor="min-obscurity"><span>Obscurity <output>{minObscurity === 20 ? "Any" : minObscurity + "+"}</output></span><input id="min-obscurity" type="range" min="20" max="95" step="5" value={minObscurity} onChange={(event) => setMinObscurity(Number(event.target.value))} /></label>
             <label className="filter-control" htmlFor="complexity"><span>Rules text</span><select id="complexity" value={complexityFilter} onChange={(event) => setComplexityFilter(event.target.value as Complexity)}><option value="any">Any complexity</option><option value="clean">Clean</option><option value="layered">Layered</option><option value="crunchy">Crunchy</option></select></label>
             <label className="filter-control" htmlFor="theme"><span>Theme</span><select id="theme" value={theme} onChange={(event) => setTheme(event.target.value)}>{themes.map((item) => <option key={item}>{item}</option>)}</select></label>
             <label className="challenge-toggle"><input type="checkbox" checked={showChallengePicks} onChange={(event) => setShowChallengePicks(event.target.checked)} /><span>Include challenge picks <small>+{Math.max(0, cards.length - recommendedTotal).toLocaleString()}</small></span></label>
+            {communityRows.length > 0 && <label className="challenge-toggle"><input type="checkbox" checked={showShitlisted} onChange={(event) => setShowShitlisted(event.target.checked)} /><span>Include community rejects <small>+{communityRows.length}</small></span></label>}
             <button className="reset-filters" onClick={resetFilters}>Reset</button>
           </div>
         </details>
@@ -382,6 +422,27 @@ export default function Home() {
           </div>
         </article>)}</div>
           : <div className="empty-shortlist"><h2>Nothing saved yet.</h2><p>Swipe up or tap Favorite on a commander.</p><button onClick={() => setView("discover")}>Discover commanders</button></div>}
+      </section>}
+
+      {view === "shitlist" && <section className="shortlist-page shitlist-page">
+        <div className="shortlist-heading">
+          <button onClick={() => setView("discover")}>← Discover</button>
+          <h1>Community Shit List</h1>
+          <p>Hidden from discovery after 25+ votes and a 70%+ rejection rate.</p>
+        </div>
+        {!communityConfigured ? <div className="community-state"><h2>Database connection pending.</h2><p>The shared voting UI is ready; Supabase still needs to be connected to this build.</p></div>
+          : communityLoading ? <div className="community-state"><Skeleton height={180} borderRadius={8} baseColor="#211f1a" highlightColor="#353126" /></div>
+            : communityError ? <div className="community-state"><h2>Community votes are unavailable.</h2><p>{communityError}</p><button onClick={loadCommunityShitlist}>Try again</button></div>
+              : shitlistCards.length ? <div className="shortlist-grid">{shitlistCards.map(({ card, row }) => <article key={card.id} className="saved-card shitlisted-card">
+                <button className="saved-image" onClick={() => { setShowShitlisted(true); selectCard(card); }}><img src={card.imageUrl} alt={card.name} loading="lazy" referrerPolicy="no-referrer" /></button>
+                <div className="saved-copy">
+                  <div><ColorPips colors={card.colorIdentity} symbols={symbols} /><strong className="reject-rate">{row.rejectionRate}% rejected</strong></div>
+                  <button className="saved-name" onClick={() => { setShowShitlisted(true); selectCard(card); }}>{card.name}</button>
+                  <ManaCost cost={card.manaCost} symbols={symbols} />
+                  <p>{row.rejects} rejects · {row.totalVotes} total votes</p>
+                </div>
+              </article>)}</div>
+                : <div className="empty-shortlist"><h2>Nobody qualifies yet.</h2><p>Commanders appear here only after enough community reactions.</p><button onClick={() => setView("discover")}>Start voting</button></div>}
       </section>}
 
       <footer>Card data and imagery via Scryfall · Popularity signals via EDHREC</footer>

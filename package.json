@@ -12,6 +12,7 @@
     "data:classify": "node scripts/apply-challenge-filter.mjs"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.112.2",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
     "react-loading-skeleton": "^3.5.0"
