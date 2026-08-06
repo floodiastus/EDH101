@@ -78,17 +78,15 @@ button:focus-visible, summary:focus-visible, select:focus-visible, input:focus-v
 .discovery-stage::after { content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none; background: radial-gradient(circle at 31% 48%, rgba(14,13,10,.2), rgba(14,13,10,.82) 58%, rgba(14,13,10,.97)); }
 
 .card-column { min-width: 0; justify-self: center; width: 100%; }
-.swipe-card { width: 100%; position: relative; touch-action: none; user-select: none; cursor: grab; transition: transform 180ms ease; }
+.swipe-card { width: 100%; position: relative; touch-action: pan-y; user-select: none; cursor: grab; transition: transform 180ms ease; }
 .swipe-card:active { cursor: grabbing; }
 .swipe-card > a { display: block; border-radius: 4.7% / 3.4%; box-shadow: 0 28px 76px rgba(0,0,0,.58), 0 0 0 1px rgba(255,255,255,.14); }
 .swipe-card img { width: 100%; height: auto; display: block; border-radius: inherit; pointer-events: none; }
 .swipe-feedback { padding: 7px 10px; position: absolute; z-index: 2; opacity: 0; border: 2px solid currentColor; border-radius: 4px; background: rgba(15,14,11,.78); font: 900 12px var(--font-geist-mono), monospace; letter-spacing: .08em; text-transform: uppercase; transition: opacity 100ms ease; pointer-events: none; }
 .swipe-feedback.reject { top: 20px; right: 17px; color: var(--red); transform: rotate(8deg); }
-.swipe-feedback.intriguing { top: 20px; left: 17px; color: var(--acid); transform: rotate(-8deg); }
-.swipe-feedback.favorite { left: 50%; bottom: 24px; color: var(--acid); transform: translateX(-50%); }
+.swipe-feedback.save { top: 20px; left: 17px; color: var(--acid); transform: rotate(-8deg); }
 .swipe-card[data-intent="reject"] .swipe-feedback.reject,
-.swipe-card[data-intent="intriguing"] .swipe-feedback.intriguing,
-.swipe-card[data-intent="favorite"] .swipe-feedback.favorite { opacity: 1; }
+.swipe-card[data-intent="save"] .swipe-feedback.save { opacity: 1; }
 .swipe-hint { display: none; }
 
 .commander-profile { min-width: 0; max-width: 620px; }
@@ -122,11 +120,10 @@ button:focus-visible, summary:focus-visible, select:focus-visible, input:focus-v
 .build-note summary { width: max-content; cursor: pointer; text-decoration: underline; }
 .build-note p { margin: 8px 0 0; line-height: 1.5; }
 
-.reaction-bar { margin-top: 22px; display: grid; grid-template-columns: 1fr 1.15fr 1.15fr; gap: 7px; }
+.reaction-bar { margin-top: 22px; display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
 .reaction-bar button { min-height: 47px; display: flex; align-items: center; justify-content: center; gap: 7px; border-radius: 4px; text-transform: uppercase; letter-spacing: .06em; font: 800 8px var(--font-geist-mono), monospace; }
 .reaction-bar button span { font-size: 13px; }
 .reaction-bar .pass { color: #9a9285; border: 1px solid var(--line); background: rgba(15,14,11,.65); }
-.reaction-bar .intrigue { color: #18150f; border: 1px solid var(--cream); background: var(--cream); }
 .reaction-bar .love { color: #18150f; border: 1px solid var(--acid); background: var(--acid); }
 .reaction-bar button:hover { filter: brightness(1.06); transform: translateY(-1px); }
 

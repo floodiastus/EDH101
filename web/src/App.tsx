@@ -41,7 +41,7 @@ type CommanderCard = {
 
 type View = "discover" | "shortlist" | "shitlist";
 type Complexity = "any" | "clean" | "layered" | "crunchy";
-type Reaction = "pass" | "intrigue" | "love";
+type Reaction = "pass" | "love";
 
 const COLORS = [
   { key: "W", label: "White" },
@@ -158,7 +158,6 @@ export default function Home() {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [seen, setSeen] = useState<string[]>([]);
   const [shortlist, setShortlist] = useState<CommanderCard[]>([]);
-  const [taste, setTaste] = useState<Record<string, number>>({});
   const [view, setView] = useState<View>("discover");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -167,19 +166,18 @@ export default function Home() {
   const [communityError, setCommunityError] = useState("");
   const [storageReady, setStorageReady] = useState(false);
   const [drag, setDrag] = useState({ x: 0, y: 0, active: false });
-  const swipeOrigin = useRef<{ x: number; y: number; pointerId: number } | null>(null);
+  const swipeOrigin = useRef<{ x: number; pointerId: number } | null>(null);
 
   useEffect(() => {
     try {
       const saved = window.localStorage.getItem("deep-cuts-taste");
       if (saved) {
-        const data = JSON.parse(saved) as { shortlist?: CommanderCard[]; taste?: Record<string, number> };
+        const data = JSON.parse(saved) as { shortlist?: CommanderCard[] };
         setShortlist((data.shortlist ?? []).map((card) => ({
           ...card,
           tribes: Array.isArray(card.tribes) ? card.tribes : [],
           signatures: Array.isArray(card.signatures) ? card.signatures.filter((item) => typeof item === "object" && item !== null) : [],
         })));
-        setTaste(data.taste ?? {});
       }
     } catch {}
     setStorageReady(true);
@@ -187,8 +185,8 @@ export default function Home() {
 
   useEffect(() => {
     if (!storageReady) return;
-    window.localStorage.setItem("deep-cuts-taste", JSON.stringify({ shortlist, taste }));
-  }, [shortlist, taste, storageReady]);
+    window.localStorage.setItem("deep-cuts-taste", JSON.stringify({ shortlist }));
+  }, [shortlist, storageReady]);
 
   useEffect(() => {
     void loadCommanders();
@@ -246,6 +244,13 @@ export default function Home() {
   }, [cards, showChallengePicks]);
 
   const recommendedTotal = useMemo(() => cards.filter((card) => !card.challengePick).length, [cards]);
+  const taste = useMemo(() => {
+    const likedThemes: Record<string, number> = {};
+    for (const card of shortlist) {
+      for (const item of card.themes) likedThemes[item] = (likedThemes[item] ?? 0) + 1;
+    }
+    return likedThemes;
+  }, [shortlist]);
   const shitlistedIds = useMemo(() => new Set(communityRows.map((row) => row.cardId)), [communityRows]);
   const shitlistCards = useMemo(() => communityRows
     .map((row) => ({ row, card: cards.find((card) => card.id === row.cardId) }))
@@ -286,14 +291,10 @@ export default function Home() {
     setDrag({ x: 0, y: 0, active: false });
     setSeen((items) => items.includes(card.id) ? items : [...items, card.id]);
     setActiveId(null);
-    const weight = reaction === "love" ? 2 : reaction === "intrigue" ? 1 : -.25;
-    setTaste((currentTaste) => {
-      const next = { ...currentTaste };
-      for (const item of card.themes) next[item] = (next[item] ?? 0) + weight;
-      return next;
-    });
     if (reaction === "love") {
       setShortlist((items) => items.some((item) => item.id === card.id) ? items : [...items, card]);
+    } else {
+      setShortlist((items) => items.filter((item) => item.id !== card.id));
     }
     if (communityConfigured) {
       void castCommunityVote(card.id, reaction)
@@ -330,7 +331,7 @@ export default function Home() {
 
   function beginSwipe(event: ReactPointerEvent<HTMLDivElement>) {
     if (event.pointerType === "mouse" && event.button !== 0) return;
-    swipeOrigin.current = { x: event.clientX, y: event.clientY, pointerId: event.pointerId };
+    swipeOrigin.current = { x: event.clientX, pointerId: event.pointerId };
     event.currentTarget.setPointerCapture(event.pointerId);
     setDrag({ x: 0, y: 0, active: true });
   }
@@ -338,7 +339,7 @@ export default function Home() {
   function moveSwipe(event: ReactPointerEvent<HTMLDivElement>) {
     const origin = swipeOrigin.current;
     if (!origin || origin.pointerId !== event.pointerId) return;
-    setDrag({ x: event.clientX - origin.x, y: event.clientY - origin.y, active: true });
+    setDrag({ x: event.clientX - origin.x, y: 0, active: true });
   }
 
   function cancelSwipe() {
@@ -350,23 +351,15 @@ export default function Home() {
     const origin = swipeOrigin.current;
     if (!origin || origin.pointerId !== event.pointerId) return;
     const x = event.clientX - origin.x;
-    const y = event.clientY - origin.y;
     swipeOrigin.current = null;
     if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
 
-    if (y <= -72 && Math.abs(y) >= Math.abs(x) * .8) reactTo(card, "love");
-    else if (x <= -72 && Math.abs(x) >= Math.abs(y) * .8) reactTo(card, "pass");
-    else if (x >= 72 && Math.abs(x) >= Math.abs(y) * .8) reactTo(card, "intrigue");
+    if (x <= -72) reactTo(card, "pass");
+    else if (x >= 72) reactTo(card, "love");
     else setDrag({ x: 0, y: 0, active: false });
   }
 
-  const swipeIntent = drag.y < -38 && Math.abs(drag.y) >= Math.abs(drag.x) * .8
-    ? "favorite"
-    : drag.x < -38 && Math.abs(drag.x) >= Math.abs(drag.y) * .8
-      ? "reject"
-      : drag.x > 38 && Math.abs(drag.x) >= Math.abs(drag.y) * .8
-        ? "intriguing"
-        : "";
+  const swipeIntent = drag.x < -38 ? "reject" : drag.x > 38 ? "save" : "";
   const currentDeckSearch = current ? deckSearch(current) : null;
 
   return (
@@ -377,7 +370,7 @@ export default function Home() {
         </button>
         <div className="header-actions">
           <button className={view === "shortlist" ? "shortlist-link active" : "shortlist-link"} onClick={() => setView("shortlist")}>
-            Shortlist <b>{shortlist.length}</b>
+            Liked <b>{shortlist.length}</b>
           </button>
           {communityConfigured && <button className={view === "shitlist" ? "shitlist-link active" : "shitlist-link"} onClick={() => { setView("shitlist"); void loadCommunityShitlist(); }}>
             Shit List <b>{communityRows.length}</b>
@@ -418,16 +411,15 @@ export default function Home() {
                     onPointerMove={moveSwipe}
                     onPointerUp={(event) => finishSwipe(event, current)}
                     onPointerCancel={cancelSwipe}
-                    style={drag.active ? { transform: `translate3d(${drag.x}px, ${Math.min(drag.y, 24)}px, 0) rotate(${drag.x / 28}deg)`, transition: "none" } : undefined}
+                    style={drag.active ? { transform: `translate3d(${drag.x}px, 0, 0) rotate(${drag.x / 28}deg)`, transition: "none" } : undefined}
                   >
                     <span className="swipe-feedback reject">Reject</span>
-                    <span className="swipe-feedback intriguing">Intriguing</span>
-                    <span className="swipe-feedback favorite">Favorite</span>
+                    <span className="swipe-feedback save">Like</span>
                     <a href={current.scryfallUrl} target="_blank" rel="noreferrer" aria-label={"View " + current.name + " on Scryfall"}>
                       <img src={current.imageUrl} alt={current.name} draggable="false" referrerPolicy="no-referrer" />
                     </a>
                   </div>
-                  <p className="swipe-hint"><span>← Reject</span><span>→ Intriguing</span><span>↑ Favorite</span></p>
+                  <p className="swipe-hint"><span>← Reject</span><span>Like →</span></p>
                 </div>
 
                 <article className="commander-profile">
@@ -452,8 +444,7 @@ export default function Home() {
 
                   <div className="reaction-bar" aria-label="Commander reactions">
                     <button className="pass" onClick={() => reactTo(current, "pass")}><span>←</span> Reject</button>
-                    <button className="intrigue" onClick={() => reactTo(current, "intrigue")}><span>?</span> Intriguing</button>
-                    <button className="love" onClick={() => reactTo(current, "love")}><span>↑</span> Favorite</button>
+                    <button className="love" onClick={() => reactTo(current, "love")}>Like <span>→</span></button>
                   </div>
                 </article>
               </>
@@ -464,8 +455,8 @@ export default function Home() {
       {view === "shortlist" && <section className="shortlist-page">
         <div className="shortlist-heading">
           <button onClick={() => setView("discover")}>← Discover</button>
-          <h1>Shortlist</h1>
-          <p>{shortlist.length} saved on this device</p>
+          <h1>Liked commanders</h1>
+          <p>{shortlist.length} right-swiped on this device</p>
         </div>
         {shortlist.length ? <div className="shortlist-grid">{shortlist.map((card) => <article key={card.id} className="saved-card">
           <button className="saved-image" onClick={() => selectCard(card)}><img src={card.imageUrl} alt={card.name} loading="lazy" referrerPolicy="no-referrer" /></button>
@@ -475,7 +466,7 @@ export default function Home() {
             <p>{card.obscurityScore}/100 obscure · {card.deckCount !== null ? card.deckCount.toLocaleString() + " decks" : "#" + card.popularityRank.toLocaleString()}</p>
           </div>
         </article>)}</div>
-          : <div className="empty-shortlist"><h2>Nothing saved yet.</h2><p>Swipe up or tap Favorite on a commander.</p><button onClick={() => setView("discover")}>Discover commanders</button></div>}
+          : <div className="empty-shortlist"><h2>No likes yet.</h2><p>Swipe right or tap Like on a commander.</p><button onClick={() => setView("discover")}>Discover commanders</button></div>}
       </section>}
 
       {view === "shitlist" && <section className="shortlist-page shitlist-page">
