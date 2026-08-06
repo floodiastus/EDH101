@@ -1,6 +1,6 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
-export type CommunityReaction = "pass" | "intrigue" | "love";
+export type CommunityReaction = "pass" | "love";
 
 export type CommunityShitlistRow = {
   cardId: string;
