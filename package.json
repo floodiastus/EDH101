@@ -6,7 +6,7 @@
   "packageManager": "pnpm@10.22.0",
   "scripts": {
     "dev": "vite",
-    "build": "tsc --noEmit && vite build",
+    "build": "tsc --noEmit && vite build && node scripts/stage-pages.mjs",
     "preview": "vite preview",
     "data:update": "node scripts/update-data.mjs"
   },

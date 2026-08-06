@@ -223,8 +223,8 @@ async function main() {
   for (const item of Array.isArray(symbolData.data) ? symbolData.data.map(record) : []) {
     if (item.symbol && item.svg_uri) symbols[String(item.symbol)] = String(item.svg_uri);
   }
-  await mkdir(new URL("../public/data/", import.meta.url), { recursive: true });
-  await writeFile(new URL("../public/data/commanders.json", import.meta.url), JSON.stringify({ generatedAt: new Date().toISOString(), cards, symbols }));
+  await mkdir(new URL("../web/public/data/", import.meta.url), { recursive: true });
+  await writeFile(new URL("../web/public/data/commanders.json", import.meta.url), JSON.stringify({ generatedAt: new Date().toISOString(), cards, symbols }));
   console.log(`Wrote ${cards.length} commanders; ${enrichedById.size} include expanded EDHREC details.`);
 }
 
