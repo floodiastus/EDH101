@@ -17,7 +17,8 @@ type CommanderCard = {
   releasedAt: string;
   setName: string;
   edhrecRank: number;
-  deckCount: number;
+  popularityRank: number;
+  deckCount: number | null;
   salt: number;
   price: number | null;
   themes: string[];
@@ -99,7 +100,7 @@ function MiniCard({ card, symbols, onSelect }: { card: CommanderCard; symbols: R
       <span className="mini-copy">
         <ColorPips colors={card.colorIdentity} symbols={symbols} />
         <strong>{card.name}</strong>
-        <small>{card.deckCount.toLocaleString()} decks</small>
+        <small>{card.deckCount !== null ? `${card.deckCount.toLocaleString()} decks` : `#${card.popularityRank.toLocaleString()} commander`}</small>
       </span>
     </button>
   );
@@ -109,7 +110,7 @@ export default function Home() {
   const [cards, setCards] = useState<CommanderCard[]>([]);
   const [symbols, setSymbols] = useState<Record<string, string>>({});
   const [selectedColors, setSelectedColors] = useState<string[]>([]);
-  const [maxDecks, setMaxDecks] = useState(500);
+  const [minObscurity, setMinObscurity] = useState(65);
   const [theme, setTheme] = useState("Any theme");
   const [complexityFilter, setComplexityFilter] = useState<Complexity>("any");
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -181,13 +182,13 @@ export default function Home() {
         const identity = [...card.colorIdentity].sort().join("") || "C";
         return selected === identity;
       })
-      .filter((card) => card.deckCount <= maxDecks)
+      .filter((card) => card.obscurityScore >= minObscurity)
       .filter((card) => theme === "Any theme" || card.themes.includes(theme))
       .filter((card) => complexityFilter === "any" || complexity(card) === complexityFilter)
       .map((card) => ({ card, score: card.obscurityScore + card.themes.reduce((sum, item) => sum + (taste[item] ?? 0) * 7, 0) }))
-      .sort((a, b) => b.score - a.score || a.card.deckCount - b.card.deckCount)
+      .sort((a, b) => b.score - a.score || b.card.popularityRank - a.card.popularityRank)
       .map((entry) => entry.card);
-  }, [cards, selectedColors, maxDecks, theme, complexityFilter, taste]);
+  }, [cards, selectedColors, minObscurity, theme, complexityFilter, taste]);
 
   const current = useMemo(() => ranked.find((card) => card.id === activeId && !seen.includes(card.id)) ?? ranked.find((card) => !seen.includes(card.id)) ?? null, [ranked, activeId, seen]);
   const comingUp = useMemo(() => ranked.filter((card) => card.id !== current?.id && !seen.includes(card.id)).slice(0, 5), [ranked, current, seen]);
@@ -249,9 +250,9 @@ export default function Home() {
             <button className="apply-colors" onClick={dealNewStack} disabled={loading}>Search these colors <span>→</span></button>
 
             <div className="filter-block">
-              <label htmlFor="max-decks"><span>Popularity ceiling</span><b>&lt; {maxDecks.toLocaleString()} decks</b></label>
-              <input id="max-decks" type="range" min="50" max="1000" step="50" value={maxDecks} onChange={(event) => setMaxDecks(Number(event.target.value))} />
-              <div className="range-scale"><span>Archaeological</span><span>Underseen</span></div>
+              <label htmlFor="min-obscurity"><span>Obscurity floor</span><b>{minObscurity} / 100</b></label>
+              <input id="min-obscurity" type="range" min="35" max="95" step="5" value={minObscurity} onChange={(event) => setMinObscurity(Number(event.target.value))} />
+              <div className="range-scale"><span>Broad search</span><span>Archaeological</span></div>
             </div>
 
             <div className="filter-block">
@@ -296,7 +297,7 @@ export default function Home() {
 
                 <div className="obscurity-row">
                   <div className="obscurity-score"><span>OBSCURITY</span><strong>{current.obscurityScore}</strong><small>/100</small></div>
-                  <div><strong>{current.deckCount.toLocaleString()}</strong><span>tracked decks</span></div>
+                  <div><strong>{current.deckCount !== null ? current.deckCount.toLocaleString() : `#${current.popularityRank.toLocaleString()}`}</strong><span>{current.deckCount !== null ? "tracked decks" : "commander rank"}</span></div>
                   <div><strong>{ageLabel(current.releasedAt)}</strong><span>release age</span></div>
                   <div><strong>{money(current.price)}</strong><span>card price</span></div>
                 </div>
@@ -327,7 +328,7 @@ export default function Home() {
         <div className="shortlist-heading"><span>YOUR PRIVATE STACK</span><h1>The legends that survived the flip.</h1><p>Saved only in this browser. Open any card to return to its full profile.</p></div>
         {shortlist.length ? <div className="shortlist-grid">{shortlist.map((card, index) => <article key={card.id} className="saved-card">
           <button className="saved-image" onClick={() => selectCard(card)}><img src={card.imageUrl} alt={card.name} loading="lazy" referrerPolicy="no-referrer" /><span>{String(index + 1).padStart(2, "0")}</span></button>
-          <div><ColorPips colors={card.colorIdentity} symbols={symbols} /><h2>{card.name}</h2><ManaCost cost={card.manaCost} symbols={symbols} /><p>{card.why}</p><div className="saved-meta"><span>{card.deckCount.toLocaleString()} decks</span><span>{card.obscurityScore}/100 obscure</span></div><button className="remove-button" onClick={() => setShortlist((items) => items.filter((item) => item.id !== card.id))}>Remove</button></div>
+          <div><ColorPips colors={card.colorIdentity} symbols={symbols} /><h2>{card.name}</h2><ManaCost cost={card.manaCost} symbols={symbols} /><p>{card.why}</p><div className="saved-meta"><span>{card.deckCount !== null ? `${card.deckCount.toLocaleString()} decks` : `#${card.popularityRank.toLocaleString()} commander`}</span><span>{card.obscurityScore}/100 obscure</span></div><button className="remove-button" onClick={() => setShortlist((items) => items.filter((item) => item.id !== card.id))}>Remove</button></div>
         </article>)}</div> : <div className="empty-shortlist"><span>◇</span><h2>Nothing sleeved yet.</h2><p>Mark a commander Intriguing or Love this and it will appear here.</p><button onClick={() => setView("discover")}>Start discovering</button></div>}
       </section>}
 

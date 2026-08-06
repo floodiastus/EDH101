@@ -83,10 +83,18 @@ function explain(themes, text) {
 }
 
 function warning(deckCount, manaValue, text) {
-  if (deckCount < 50) return "Almost no established lists—expect to do some original deckbuilding.";
+  if (deckCount !== null && deckCount < 50) return "Almost no established lists—expect to do some original deckbuilding.";
   if (manaValue >= 6) return "The commander is expensive; the deck needs a plan that works before it arrives.";
   if (/each opponent|goad|control of/.test(text.toLowerCase())) return "Its effect is visible and political, so threat perception may run hot.";
   return "The commander supplies direction, not a win condition; you still have to choose the finish.";
+}
+
+function rankObscurity(popularityRank, total, releasedAt) {
+  const percentile = total <= 1 ? 1 : (popularityRank - 1) / (total - 1);
+  let score = 20 + Math.round(percentile * 79);
+  const ageMonths = Math.max(0, (Date.now() - new Date(releasedAt).getTime()) / 2_629_800_000);
+  if (ageMonths < 12) score -= Math.round((12 - ageMonths) * 1.8);
+  return Math.max(20, Math.min(99, score));
 }
 
 function obscurity(deckCount, releasedAt) {
@@ -109,7 +117,7 @@ function signatureCard(item) {
   };
 }
 
-async function candidates() {
+async function commanderPool() {
   const url = new URL("https://api.scryfall.com/cards/search");
   url.searchParams.set("q", "is:commander f:commander game:paper");
   url.searchParams.set("order", "edhrec");
@@ -117,27 +125,36 @@ async function candidates() {
   url.searchParams.set("unique", "cards");
   let page = await fetchJson(url);
   const cards = [];
-  for (let pageNumber = 0; pageNumber < 10; pageNumber++) {
+  for (let pageNumber = 0; pageNumber < 30; pageNumber++) {
     if (Array.isArray(page.data)) cards.push(...page.data.map(record));
-    if (!page.has_more || !page.next_page || pageNumber === 9) break;
+    if (!page.has_more || !page.next_page) break;
     await wait(130);
     page = await fetchJson(String(page.next_page));
   }
-  const cutoff = Date.now() - 150 * 86_400_000;
-  return cards
-    .filter((card) => oracleText(card).length >= 45 && imageUris(card).normal && Number(card.edhrec_rank ?? 0) > 0 && new Date(String(card.released_at ?? 0)).getTime() < cutoff)
-    .map((card, index) => {
-      const year = new Date(String(card.released_at ?? 0)).getUTCFullYear();
-      const modern = year >= 2017 ? 10 : year >= 2008 ? 5 : 0;
-      const variety = ((index * 7919 + String(card.id).charCodeAt(0) * 104729) % 1200) / 100;
-      return { card, score: mechanicalInterest(oracleText(card)) + modern + variety };
-    })
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 190)
-    .map((entry) => entry.card);
+  return cards.filter((card) => imageUris(card).normal && new Date(String(card.released_at ?? 0)).getTime() <= Date.now());
 }
 
-async function enrich(card) {
+function baseCard(card, popularityRank, total) {
+  const name = String(card.name ?? "").split(" // ")[0];
+  const images = imageUris(card);
+  const text = oracleText(card);
+  const themes = deriveThemes(card, []);
+  const priceValue = record(card.prices).usd ? Number(record(card.prices).usd) : null;
+  return {
+    id: String(card.id ?? name), name, manaCost: manaCost(card), manaValue: Number(card.cmc ?? 0),
+    typeLine: String(card.type_line ?? "Legendary Creature"), oracleText: text,
+    colorIdentity: Array.isArray(card.color_identity) ? card.color_identity.map(String) : [],
+    imageUrl: String(images.normal ?? images.large ?? ""), artUrl: String(images.art_crop ?? images.normal ?? ""),
+    scryfallUrl: String(card.scryfall_uri ?? "https://scryfall.com"), releasedAt: String(card.released_at ?? ""),
+    setName: String(card.set_name ?? ""), edhrecRank: Number(card.edhrec_rank ?? 0), popularityRank,
+    deckCount: null, salt: 0, price: Number.isFinite(priceValue) ? priceValue : null,
+    themes, signatures: [], obscurityScore: rankObscurity(popularityRank, total, String(card.released_at ?? "")),
+    why: explain(themes, text), caution: warning(null, Number(card.cmc ?? 0), text),
+  };
+}
+
+async function enrich(entry, total) {
+  const { card, popularityRank } = entry;
   try {
     const name = String(card.name ?? "").split(" // ")[0];
     const edhrec = await fetchJson(`https://json.edhrec.com/pages/commanders/${slugify(name)}.json`);
@@ -159,14 +176,14 @@ async function enrich(card) {
       colorIdentity: Array.isArray(card.color_identity) ? card.color_identity.map(String) : [],
       imageUrl: String(images.normal ?? images.large ?? ""), artUrl: String(images.art_crop ?? images.normal ?? ""),
       scryfallUrl: String(card.scryfall_uri ?? "https://scryfall.com"), releasedAt: String(card.released_at ?? ""),
-      setName: String(card.set_name ?? ""), edhrecRank: Number(card.edhrec_rank ?? commander.rank ?? 0),
+      setName: String(card.set_name ?? ""), edhrecRank: Number(card.edhrec_rank ?? commander.rank ?? 0), popularityRank,
       deckCount, salt: Number(commander.salt ?? 0), price: Number.isFinite(priceValue) ? priceValue : null,
       themes, signatures, obscurityScore: obscurity(deckCount, String(card.released_at ?? "")),
       why: explain(themes, text), caution: warning(deckCount, Number(card.cmc ?? 0), text),
     };
   } catch (error) {
-    console.warn(`Skipped ${card.name}: ${error.message}`);
-    return null;
+    console.warn(`Using rank-only data for ${card.name}: ${error.message}`);
+    return baseCard(card, popularityRank, total);
   }
 }
 
@@ -185,21 +202,30 @@ async function mapLimit(items, limit, mapper) {
 }
 
 async function main() {
-  console.log("Finding underplayed commanders...");
-  const [candidateCards, symbolData] = await Promise.all([candidates(), fetchJson("https://api.scryfall.com/symbology")]);
-  console.log(`Enriching ${candidateCards.length} candidates with popularity data...`);
-  const enriched = await mapLimit(candidateCards, 5, enrich);
-  const cards = enriched.filter(Boolean).map((card) => {
-    const sweetSpot = card.deckCount >= 60 && card.deckCount <= 900 ? 12 : card.deckCount < 30 ? -12 : 0;
-    return { card, score: card.obscurityScore + mechanicalInterest(card.oracleText) + sweetSpot + Math.min(6, card.themes.length) };
-  }).sort((a, b) => b.score - a.score || a.card.deckCount - b.card.deckCount).slice(0, 150).map((entry) => entry.card);
+  console.log("Loading the complete legal commander pool...");
+  const [pool, symbolData] = await Promise.all([commanderPool(), fetchJson("https://api.scryfall.com/symbology")]);
+  const total = pool.length;
+  const enrichmentPool = pool
+    .map((card, index) => {
+      const year = new Date(String(card.released_at ?? 0)).getUTCFullYear();
+      const modern = year >= 2017 ? 10 : year >= 2008 ? 5 : 0;
+      const variety = ((index * 7919 + String(card.id).charCodeAt(0) * 104729) % 1200) / 100;
+      return { card, popularityRank: total - index, score: mechanicalInterest(oracleText(card)) + modern + variety };
+    })
+    .filter((entry) => entry.popularityRank > total * .45 && oracleText(entry.card).length >= 45)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 220);
+  console.log(`Layering detailed popularity data onto ${enrichmentPool.length} promising deep cuts...`);
+  const enriched = await mapLimit(enrichmentPool, 5, (entry) => enrich(entry, total));
+  const enrichedById = new Map(enriched.filter(Boolean).map((card) => [card.id, card]));
+  const cards = pool.map((card, index) => enrichedById.get(String(card.id)) ?? baseCard(card, total - index, total));
   const symbols = {};
   for (const item of Array.isArray(symbolData.data) ? symbolData.data.map(record) : []) {
     if (item.symbol && item.svg_uri) symbols[String(item.symbol)] = String(item.svg_uri);
   }
   await mkdir(new URL("../public/data/", import.meta.url), { recursive: true });
   await writeFile(new URL("../public/data/commanders.json", import.meta.url), JSON.stringify({ generatedAt: new Date().toISOString(), cards, symbols }));
-  console.log(`Wrote ${cards.length} commanders.`);
+  console.log(`Wrote ${cards.length} commanders; ${enrichedById.size} include expanded EDHREC details.`);
 }
 
 await main();
