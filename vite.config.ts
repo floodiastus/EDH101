@@ -10,8 +10,8 @@ export default defineConfig({
     emptyOutDir: true,
     rollupOptions: {
       output: {
-        entryFileNames: "assets/app.js",
-        assetFileNames: "assets/app.[ext]",
+        entryFileNames: "assets/app-[hash].js",
+        assetFileNames: "assets/[name]-[hash][extname]",
       },
     },
   },
