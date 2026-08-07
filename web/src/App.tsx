@@ -181,8 +181,10 @@ function money(value: number | null) {
 
 function shuffled<T>(items: T[]) {
   const result = [...items];
+  const randomValues = new Uint32Array(Math.max(0, result.length - 1));
+  window.crypto.getRandomValues(randomValues);
   for (let index = result.length - 1; index > 0; index--) {
-    const swap = Math.floor(Math.random() * (index + 1));
+    const swap = randomValues[index - 1] % (index + 1);
     [result[index], result[swap]] = [result[swap], result[index]];
   }
   return result;
@@ -450,7 +452,7 @@ export default function Home() {
   function openBooster() {
     if (packOpening || !availableForPack.length) return;
     playSound("pack");
-    const nextPack = availableForPack.slice(0, PACK_SIZE);
+    const nextPack = shuffled(availableForPack).slice(0, PACK_SIZE);
     setPackIds(nextPack.map((card) => card.id));
     setPackTotal(nextPack.length);
     setPackOpening(true);
