@@ -103,17 +103,27 @@ function scryfallType(creatureType: string) {
   return /\s/.test(creatureType) ? `t:"${creatureType.toLowerCase()}"` : `t:${creatureType.toLowerCase()}`;
 }
 
-function createdCreatureTypes(oracleText: string) {
-  const types = Array.from(oracleText.matchAll(/\b(?:create|Create)\b[^.!?\n]*?\b((?:[A-Z][a-zA-Z'’-]*)(?:\s+[A-Z][a-zA-Z'’-]*)*)\s+(?:(?:artifact|enchantment|land)\s+)*creature tokens?\b/g),
+function createdTokenTypes(oracleText: string) {
+  const namedTokens = Array.from(oracleText.matchAll(/\btokens?\s+named\s+([A-Z][^"\n.,]*?)(?=\s+(?:with|attached|equal|where|that's)\b|[,.])/g))
+    .filter((match) => !/\bcreature\s+$/i.test(oracleText.slice(Math.max(0, (match.index ?? 0) - 24), match.index)))
+    .map((match) => match[1].trim());
+  const creatureTypes = Array.from(oracleText.matchAll(/\b(?:create|Create)\b[^.!?\n]*?\b((?:[A-Z][a-zA-Z'’-]*)(?:\s+[A-Z][a-zA-Z'’-]*)*)\s+(?:(?:artifact|enchantment|land)\s+)*creature tokens?\b/g),
     (match) => match[1]);
 
   // Some cards define token types in bullet points after the create instruction.
   if (/create a creature token with those characteristics/i.test(oracleText)) {
-    types.push(...Array.from(oracleText.matchAll(/•\s+(?:X|\d+\/\d+)\s+(?:[a-z]+\s+)*((?:[A-Z][a-zA-Z'’-]*)(?:\s+[A-Z][a-zA-Z'’-]*)*)\s+with\b/g),
+    creatureTypes.push(...Array.from(oracleText.matchAll(/•\s+(?:X|\d+\/\d+)\s+(?:[a-z]+\s+)*((?:[A-Z][a-zA-Z'’-]*)(?:\s+[A-Z][a-zA-Z'’-]*)*)\s+with\b/g),
       (match) => match[1]));
   }
 
-  return [...new Set(types)];
+  const noncreatureTypes = oracleText
+    .split(/[.!?\n]/)
+    .filter((clause) => /\bcreate\b/i.test(clause))
+    .flatMap((clause) => Array.from(clause.matchAll(/\b((?:[A-Z][a-zA-Z'’-]*)(?:\s+[A-Z][a-zA-Z'’-]*)*)\s+(?:(?:artifact|enchantment)\s+)*tokens?\b/g),
+      (match) => match[1].replace(/^X\s+/, "")))
+    .filter((type) => !["This", "That", "Those", "X"].includes(type));
+
+  return [...new Set([...namedTokens, ...creatureTypes, ...noncreatureTypes])];
 }
 
 function tokenTypeSearch(creatureType: string) {
@@ -134,7 +144,7 @@ function edhrecCommanderUrl(name: string) {
 
 function deckSearches(card: CommanderCard) {
   const tribes = card.tribes ?? [];
-  const createdTypes = createdCreatureTypes(card.oracleText);
+  const createdTypes = createdTokenTypes(card.oracleText);
   const identity = card.colorIdentity.length ? card.colorIdentity.join("").toLowerCase() : "c";
   const orderedThemes = [
     ...SEARCH_THEME_PRIORITY.filter((theme) => card.themes.includes(theme)),
