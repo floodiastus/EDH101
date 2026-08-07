@@ -190,6 +190,31 @@ function shuffled<T>(items: T[]) {
   return result;
 }
 
+function randomUnit() {
+  const value = new Uint32Array(1);
+  window.crypto.getRandomValues(value);
+  return value[0] / 0x100000000;
+}
+
+function weightedSample<T>(items: T[], count: number, weightFor: (item: T) => number) {
+  const pool = [...items];
+  const picked: T[] = [];
+  while (pool.length && picked.length < count) {
+    const weights = pool.map((item) => Math.max(0.01, weightFor(item)));
+    let roll = randomUnit() * weights.reduce((sum, weight) => sum + weight, 0);
+    let pickedIndex = weights.length - 1;
+    for (let index = 0; index < weights.length; index++) {
+      roll -= weights[index];
+      if (roll <= 0) {
+        pickedIndex = index;
+        break;
+      }
+    }
+    picked.push(pool.splice(pickedIndex, 1)[0]);
+  }
+  return picked;
+}
+
 function ManaSymbol({ symbol, symbols, className = "" }: { symbol: string; symbols: Record<string, string>; className?: string }) {
   const uri = symbols?.[symbol];
   return uri
@@ -341,7 +366,7 @@ export default function Home() {
     .filter((entry): entry is { row: CommunityShitlistRow; card: CommanderCard } => Boolean(entry.card)),
   [communityRows, cards]);
 
-  const ranked = useMemo(() => cards
+  const eligible = useMemo(() => cards
     .filter((card) => {
       if (!selectedColors.length) return true;
       const selected = [...selectedColors].sort().join("");
@@ -352,11 +377,8 @@ export default function Home() {
     .filter((card) => showChallengePicks || !card.challengePick)
     .filter((card) => showShitlisted || !shitlistedIds.has(card.id))
     .filter((card) => theme === "Any theme" || card.themes.includes(theme))
-    .filter((card) => complexityFilter === "any" || complexity(card) === complexityFilter)
-    .map((card) => ({ card, score: card.popularityRank + card.themes.reduce((sum, item) => sum + (taste[item] ?? 0) * 120, 0) }))
-    .sort((a, b) => b.score - a.score)
-    .map((entry) => entry.card),
-  [cards, selectedColors, popularityStart, popularityEnd, showChallengePicks, showShitlisted, shitlistedIds, theme, complexityFilter, taste]);
+    .filter((card) => complexityFilter === "any" || complexity(card) === complexityFilter),
+  [cards, selectedColors, popularityStart, popularityEnd, showChallengePicks, showShitlisted, shitlistedIds, theme, complexityFilter]);
 
   const packCards = useMemo(() => packIds
     .map((id) => cards.find((card) => card.id === id))
@@ -364,7 +386,7 @@ export default function Home() {
   [packIds, cards]);
   const current = packCards[0] ?? null;
 
-  const availableForPack = useMemo(() => ranked.filter((card) => !seen.includes(card.id)), [ranked, seen]);
+  const availableForPack = useMemo(() => eligible.filter((card) => !seen.includes(card.id)), [eligible, seen]);
   const packPosition = current ? packTotal - packCards.length + 1 : packTotal;
   const currentStackDepth = Math.max(0, packTotal - packCards.length);
 
@@ -452,7 +474,10 @@ export default function Home() {
   function openBooster() {
     if (packOpening || !availableForPack.length) return;
     playSound("pack");
-    const nextPack = shuffled(availableForPack).slice(0, PACK_SIZE);
+    const nextPack = weightedSample(availableForPack, PACK_SIZE, (card) => {
+      const affinity = card.themes.reduce((sum, item) => sum + (taste[item] ?? 0), 0);
+      return 1 + Math.min(5, affinity * 0.65);
+    });
     setPackIds(nextPack.map((card) => card.id));
     setPackTotal(nextPack.length);
     setPackOpening(true);
@@ -471,6 +496,18 @@ export default function Home() {
     setComplexityFilter("any");
     setShowChallengePicks(false);
     setShowShitlisted(false);
+    setPackIds([]);
+    setPackTotal(PACK_SIZE);
+    setPackOpened(false);
+    setPackOpening(false);
+  }
+
+  function resetProfile() {
+    if (!window.confirm("Reset all likes and seen-card history?")) return;
+    playSound("select");
+    window.localStorage.removeItem("deep-cuts-taste");
+    setShortlist([]);
+    setSeen([]);
     setPackIds([]);
     setPackTotal(PACK_SIZE);
     setPackOpened(false);
@@ -594,7 +631,7 @@ export default function Home() {
 
       {view === "discover" && <section className="discover-page">
         <details className="filters-panel">
-          <summary><span>Filters</span><small>{ranked.length.toLocaleString()} matches</small><i aria-hidden="true">+</i></summary>
+          <summary><span>Filters</span><small>{eligible.length.toLocaleString()} matches</small><i aria-hidden="true">+</i></summary>
           <div className="filter-grid">
             <fieldset className="color-control">
               <legend>Color identity</legend>
@@ -744,8 +781,8 @@ export default function Home() {
           <button onClick={() => setView("discover")}>← Discover</button>
           <h1>Liked commanders</h1>
           <div className="shortlist-summary">
-            <p>{shortlist.length} right-swiped on this device</p>
-            {shortlist.length > 0 && <button className="clear-pool" onClick={() => setShortlist([])}>Clear pool</button>}
+            <p>Your profile: {shortlist.length} liked · {seen.length} rated. Likes gently weight future packs toward shared themes.</p>
+            {(shortlist.length > 0 || seen.length > 0) && <button className="clear-pool" onClick={resetProfile}>Reset profile</button>}
           </div>
         </div>
         {shortlist.length ? <div className="liked-grid">{shortlist.map((card) =>

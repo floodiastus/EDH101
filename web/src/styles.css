@@ -242,7 +242,8 @@ button:focus-visible, summary:focus-visible, select:focus-visible, input:focus-v
 .shortlist-heading button { padding: 0; border: 0; color: #8b8478; background: transparent; font-size: 9px; }
 .shortlist-heading h1 { margin: 13px 0 5px; font: 700 clamp(42px, 7vw, 70px)/.95 Georgia, serif; letter-spacing: -.05em; }
 .shortlist-heading p { margin: 0; color: #756e63; font-size: 9px; }
-.shortlist-summary { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+.shortlist-summary { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 14px; }
+.shortlist-summary p { flex: 1 1 260px; }
 .shortlist-heading .clear-pool { min-height: 32px; padding: 0 11px; color: var(--red); border: 1px solid rgba(234,81,59,.38); border-radius: 4px; font: 800 7px var(--font-geist-mono), monospace; letter-spacing: .06em; text-transform: uppercase; }
 .shortlist-heading .clear-pool:hover { color: var(--cream); border-color: var(--red); background: rgba(234,81,59,.12); }
 .liked-grid { width: 100%; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: clamp(10px, 1.5vw, 18px); }
