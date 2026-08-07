@@ -34,4 +34,21 @@ for (const [label, oracleText, expectedTribe] of [
 
 assert.equal(classification("As this enters, choose a creature type.").tribal, true, "choose-a-type commanders should be Tribal");
 
-console.log("Theme taxonomy tribal regression checks passed.");
+function themesFor(oracleText) {
+  return deriveThemeLabels({ oracleText, typeLine: "Legendary Creature â€” Human", creatureTypes });
+}
+
+for (const [label, oracleText] of [
+  ["counter as an activation cost", "{T}, Remove a counter from a nonland permanent you control: Draw a card."],
+  ["moving counters", "Move a counter from target permanent onto another target permanent."],
+  ["counting counters", "This gets +1/+1 for each counter on permanents you control."],
+  ["proliferating", "When this enters, proliferate."],
+]) {
+  assert.ok(themesFor(oracleText).includes("Counters"), `${label} should be Counters`);
+}
+
+assert.equal(themesFor("Counter target spell unless its controller pays {2}.").includes("Counters"), false, "counterspells should not be the Counters theme");
+assert.equal(themesFor("{T}: Counter target activated ability from an artifact source unless its controller pays {W}.").includes("Counters"), false, "countering an ability from a source should not be the Counters theme");
+assert.ok(themesFor("{T}, Remove a counter from a nonland permanent you control: Draw a card.").includes("Card Draw"), "counter-cost draw should retain Card Draw as a secondary theme");
+
+console.log("Theme taxonomy regression checks passed.");

@@ -67,6 +67,7 @@ const THEME_SEARCHES: Record<string, string> = {
   Clones: 'o:"a copy"',
   Clues: "(o:clue or o:investigate)",
   Control: 'o:"counter target"',
+  Counters: '(o:"a counter" or o:counters or kw:proliferate)',
   Discard: "o:discard",
   Enchantress: "t:enchantment",
   Equipment: "t:equipment",
@@ -93,7 +94,7 @@ const THEME_SEARCHES: Record<string, string> = {
 
 const SEARCH_THEME_PRIORITY = [
   "Clues", "Food", "Treasure", "Vehicles", "Equipment", "Auras", "Planeswalkers",
-  "Landfall", "Mill", "Discard", "Sacrifice", "+1/+1 Counters", "Reanimator",
+  "Landfall", "Mill", "Discard", "Sacrifice", "+1/+1 Counters", "Counters", "Reanimator",
   "Lifedrain", "Lifegain", "Blink", "Wheels", "Extra Combats", "Extra Turns",
   "Enchantress", "Voltron", "Artifacts", "Spellslinger", "Graveyard", "Lands",
   "Tokens", "Card Draw", "Control", "Politics",

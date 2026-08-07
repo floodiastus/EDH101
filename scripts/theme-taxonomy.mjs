@@ -64,7 +64,10 @@ export function deriveThemeLabels({ oracleText = "", typeLine = "", existingThem
 
   add(detectedTribes.length > 0 || supportsFlexibleTribe(text), "Tribal");
   add(/\+1\/\+1 counters?/.test(text), "+1/+1 Counters");
-  add(/counter on|counters on|proliferate/.test(text), "Counters");
+  add(
+    /\b(?:put|remove|move|double|distribute)\b[^.!?\n]{0,80}\bcounters?\b|\bcounters?\b[^.!?\n]{0,50}\b(?:on|among)\b|\bproliferate\b/.test(text),
+    "Counters",
+  );
   add(/create .* tokens?|tokens? you control|populate/.test(text), "Tokens");
   add(/sacrifice/.test(text), "Sacrifice");
   add(/sacrifice/.test(text) && /dies|died|put into (?:a|your) graveyard from the battlefield/.test(text), "Aristocrats");
